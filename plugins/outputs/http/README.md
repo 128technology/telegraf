@@ -11,6 +11,9 @@ data formats. For data_formats that support batching, metrics are sent in batch 
   ## URL is the address to send metrics to
   url = "http://127.0.0.1:8080/telegraf"
 
+  ## Unix Socket is a unix socket serving HTTP to send metrics to
+  # unix_socket = "/var/run/http_server.sock"
+
   ## Timeout for HTTP message
   # timeout = "5s"
 

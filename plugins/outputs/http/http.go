@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -26,6 +27,9 @@ const (
 var sampleConfig = `
   ## URL is the address to send metrics to
   url = "http://127.0.0.1:8080/telegraf"
+
+  ## Unix Socket is a unix socket serving HTTP to send metrics to
+  # unix_socket = "/var/run/http_server.sock"
 
   ## Timeout for HTTP message
   # timeout = "5s"
@@ -79,6 +83,7 @@ const (
 
 type HTTP struct {
 	URL             string            `toml:"url"`
+	UnixSocket      string            `toml:"unix_socket"`
 	Timeout         internal.Duration `toml:"timeout"`
 	Method          string            `toml:"method"`
 	Username        string            `toml:"username"`
@@ -106,13 +111,21 @@ func (h *HTTP) createClient(ctx context.Context) (*http.Client, error) {
 		return nil, err
 	}
 
+	transport := &http.Transport{
+		TLSClientConfig: tlsCfg,
+		Proxy:           http.ProxyFromEnvironment,
+		IdleConnTimeout: h.IdleConnTimeout.Duration,
+	}
+
+	if len(h.UnixSocket) > 0 {
+		transport.DialContext = func(_ context.Context, _, _ string) (net.Conn, error) {
+			return net.Dial("unix", h.UnixSocket)
+		}
+	}
+
 	client := &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: tlsCfg,
-			Proxy:           http.ProxyFromEnvironment,
-			IdleConnTimeout: h.IdleConnTimeout.Duration,
-		},
-		Timeout: h.Timeout.Duration,
+		Transport: transport,
+		Timeout:   h.Timeout.Duration,
 	}
 
 	if h.ClientID != "" && h.ClientSecret != "" && h.TokenURL != "" {
