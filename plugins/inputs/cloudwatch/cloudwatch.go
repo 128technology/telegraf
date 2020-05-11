@@ -12,9 +12,9 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
 	"github.com/influxdata/telegraf"
+	internalaws "github.com/influxdata/telegraf/config/aws"
 	"github.com/influxdata/telegraf/filter"
 	"github.com/influxdata/telegraf/internal"
-	internalaws "github.com/influxdata/telegraf/internal/config/aws"
 	"github.com/influxdata/telegraf/internal/limiter"
 	"github.com/influxdata/telegraf/metric"
 	"github.com/influxdata/telegraf/plugins/inputs"
@@ -212,7 +212,7 @@ func (c *CloudWatch) Gather(acc telegraf.Accumulator) error {
 	results := []*cloudwatch.MetricDataResult{}
 
 	// 100 is the maximum number of metric data queries a `GetMetricData` request can contain.
-	batchSize := 100
+	batchSize := 500
 	var batches [][]*cloudwatch.MetricDataQuery
 
 	for batchSize < len(queries) {
