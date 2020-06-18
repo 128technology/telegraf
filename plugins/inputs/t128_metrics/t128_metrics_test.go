@@ -31,6 +31,13 @@ var ResponseProcessingTestCases = []struct {
 	ExpectedErrors    []string
 }{
 	{
+		Name:              "empty configured metrics produce no requests or metrics",
+		ConfiguredMetrics: []plugin.ConfiguredMetric{},
+		Endpoints:         []Endpoint{},
+		ExpectedMetrics:   nil,
+		ExpectedErrors:    nil,
+	},
+	{
 		Name: "empty results produce no metrics",
 		ConfiguredMetrics: []plugin.ConfiguredMetric{{
 			"test-metric",
@@ -420,26 +427,6 @@ func TestT128MetricsRequestFormation(t *testing.T) {
 	}
 }
 
-func TestT128MetricsErrorResponses(t *testing.T) {
-	for _, testCase := range RequestFormationTestCases {
-		t.Run(testCase.Name, func(t *testing.T) {
-			fakeServer := createTestServer(t, testCase.Endpoints)
-			defer fakeServer.Close()
-
-			plugin := &plugin.T128Metrics{
-				BaseURL:                 fakeServer.URL,
-				MaxSimultaneousRequests: 20,
-				ConfiguredMetrics:       testCase.ConfiguredMetrics,
-			}
-
-			var acc testutil.Accumulator
-			plugin.Init()
-
-			require.NoError(t, acc.GatherError(plugin.Gather))
-		})
-	}
-}
-
 func TestT128MetricsRequestLimiting(t *testing.T) {
 	inFlight := int32(0)
 	const limit = 3
@@ -477,6 +464,13 @@ func TestT128MetricsRequestLimiting(t *testing.T) {
 	plugin.Init()
 
 	require.NoError(t, acc.GatherError(plugin.Gather))
+}
+
+func TestEmptyBaseURLIsInvalid(t *testing.T) {
+	plugin := &plugin.T128Metrics{}
+	err := plugin.Init()
+
+	require.Errorf(t, err, "base_url is a require configuration field")
 }
 
 func createTestServer(t *testing.T, e []Endpoint) *httptest.Server {
