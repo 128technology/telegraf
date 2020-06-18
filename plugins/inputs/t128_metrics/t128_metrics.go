@@ -14,8 +14,14 @@ import (
 	"time"
 
 	"github.com/influxdata/telegraf"
-	"github.com/influxdata/telegraf/internal"
 	"github.com/influxdata/telegraf/plugins/inputs"
+)
+
+const (
+	// DefaultRequestTimeout is the request timeout if none is configured
+	DefaultRequestTimeout = time.Second * 5
+	// DefaultMaxSimultaneousRequests is the maximum simultaneous requests if none is configured
+	DefaultMaxSimultaneousRequests = 20
 )
 
 // T128Metrics is an input for metrics of a 128T router instance
@@ -23,7 +29,7 @@ type T128Metrics struct {
 	BaseURL                 string             `toml:"base_url"`
 	UnixSocket              string             `toml:"unix_socket"`
 	ConfiguredMetrics       []ConfiguredMetric `toml:"metric"`
-	Timeout                 internal.Duration  `toml:"timeout"`
+	Timeout                 time.Duration      `toml:"timeout"`
 	MaxSimultaneousRequests int                `toml:"max_simultaneous_requests"`
 
 	client  *http.Client
@@ -79,6 +85,10 @@ func (*T128Metrics) Description() string {
 
 // Init sets up the input to be ready for action
 func (plugin *T128Metrics) Init() error {
+	if plugin.BaseURL == "" {
+		return fmt.Errorf("base_url is a required configuration field")
+	}
+
 	if plugin.BaseURL[len(plugin.BaseURL)-1:] != "/" {
 		plugin.BaseURL += "/"
 	}
@@ -93,7 +103,7 @@ func (plugin *T128Metrics) Init() error {
 		}
 	}
 
-	plugin.client = &http.Client{Transport: transport, Timeout: plugin.Timeout.Duration}
+	plugin.client = &http.Client{Transport: transport, Timeout: plugin.Timeout}
 	plugin.limiter = newRequestLimiter(plugin.MaxSimultaneousRequests)
 	plugin.metrics = configuredMetricsToRequestMetrics(plugin.ConfiguredMetrics)
 
@@ -262,8 +272,8 @@ func (l *requestLimiter) done() {
 func init() {
 	inputs.Add("t128_metrics", func() telegraf.Input {
 		return &T128Metrics{
-			Timeout:                 internal.Duration{Duration: time.Second * 5},
-			MaxSimultaneousRequests: 20,
+			Timeout:                 DefaultRequestTimeout,
+			MaxSimultaneousRequests: DefaultMaxSimultaneousRequests,
 		}
 	})
 }
