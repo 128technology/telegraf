@@ -1,6 +1,6 @@
 # 128T Metrics Input Plugin
 
-The metrics input pluging collects metrics from a 128T instance.
+The metrics input plugin collects metrics from a 128T instance.
 
 ### Configuration
 
