@@ -469,8 +469,15 @@ func TestT128MetricsRequestLimiting(t *testing.T) {
 }
 
 func TestTimoutUsedForRequests(t *testing.T) {
+	done := make(chan struct{}, 1)
+
 	fakeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// hang request
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+		}
+
+		w.Write([]byte("[]"))
 	}))
 
 	plugin := &plugin.T128Metrics{
@@ -480,7 +487,7 @@ func TestTimoutUsedForRequests(t *testing.T) {
 			map[string]string{"test-field": "stats/test"},
 			map[string][]string{},
 		}},
-		Timeout:                 internal.Duration{Duration: 5 * time.Millisecond},
+		Timeout:                 internal.Duration{Duration: 1 * time.Millisecond},
 		MaxSimultaneousRequests: 1,
 	}
 
@@ -488,9 +495,14 @@ func TestTimoutUsedForRequests(t *testing.T) {
 	require.NoError(t, plugin.Init())
 
 	require.NoError(t, plugin.Gather(&acc))
-	require.Len(t, acc.Errors, 1)
+	done <- struct{}{}
 
-	fakeServer.CloseClientConnections()
+	require.Len(t, acc.Errors, 1)
+	require.EqualError(
+		t,
+		acc.Errors[0],
+		fmt.Sprintf("failed to retrieve metric stats/test: Post %s/stats/test: net/http: request canceled (Client.Timeout exceeded while awaiting headers)", fakeServer.URL))
+
 	fakeServer.Close()
 }
 
@@ -517,16 +529,16 @@ func TestLoadsFromToml(t *testing.T) {
 
 	plugin := &plugin.T128Metrics{}
 	exampleConfig := []byte(`
-	base_url = "example/base/url/"
-	unix_socket = "example.sock"
-	max_simultaneous_requests = 15
-	timeout = "500ms"
+	base_url                    = "example/base/url/"
+	unix_socket                 = "example.sock"
+	max_simultaneous_requests   = 15
+	timeout                     = "500ms"
 	[[metric]]
-	name = "cpu"
-	[metric.fields]
-	  my_field = "field_value"
-	[metric.parameters]
-	  my_parameter = ["value1", "value2"]
+	  name = "cpu"
+	  [metric.fields]
+	    my_field = "field_value"
+	  [metric.parameters]
+	    my_parameter = ["value1", "value2"]
 	`)
 
 	require.NoError(t, toml.Unmarshal(exampleConfig, plugin))
