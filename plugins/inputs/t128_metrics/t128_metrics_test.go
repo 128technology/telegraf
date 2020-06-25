@@ -11,8 +11,10 @@ import (
 	"time"
 
 	"github.com/influxdata/telegraf"
+	"github.com/influxdata/telegraf/internal"
 	plugin "github.com/influxdata/telegraf/plugins/inputs/t128_metrics"
 	"github.com/influxdata/telegraf/testutil"
+	"github.com/influxdata/toml"
 	"github.com/stretchr/testify/require"
 )
 
@@ -381,7 +383,7 @@ func TestT128MetricsResponseProcessing(t *testing.T) {
 			}
 
 			var acc testutil.Accumulator
-			plugin.Init()
+			require.NoError(t, plugin.Init())
 
 			plugin.Gather(&acc)
 
@@ -420,7 +422,7 @@ func TestT128MetricsRequestFormation(t *testing.T) {
 			}
 
 			var acc testutil.Accumulator
-			plugin.Init()
+			require.NoError(t, plugin.Init())
 
 			require.NoError(t, acc.GatherError(plugin.Gather))
 		})
@@ -461,9 +463,35 @@ func TestT128MetricsRequestLimiting(t *testing.T) {
 	}
 
 	var acc testutil.Accumulator
-	plugin.Init()
+	require.NoError(t, plugin.Init())
 
 	require.NoError(t, acc.GatherError(plugin.Gather))
+}
+
+func TestTimoutUsedForRequests(t *testing.T) {
+	fakeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// hang request
+	}))
+
+	plugin := &plugin.T128Metrics{
+		BaseURL: fakeServer.URL,
+		ConfiguredMetrics: []plugin.ConfiguredMetric{{
+			"test-metric",
+			map[string]string{"test-field": "stats/test"},
+			map[string][]string{},
+		}},
+		Timeout:                 internal.Duration{Duration: 5 * time.Millisecond},
+		MaxSimultaneousRequests: 1,
+	}
+
+	var acc testutil.Accumulator
+	require.NoError(t, plugin.Init())
+
+	require.NoError(t, plugin.Gather(&acc))
+	require.Len(t, acc.Errors, 1)
+
+	fakeServer.CloseClientConnections()
+	fakeServer.Close()
 }
 
 func TestEmptyBaseURLIsInvalid(t *testing.T) {
@@ -471,6 +499,41 @@ func TestEmptyBaseURLIsInvalid(t *testing.T) {
 	err := plugin.Init()
 
 	require.Errorf(t, err, "base_url is a require configuration field")
+}
+
+func TestZeroMaxSimultaneousRequestsIsInvalid(t *testing.T) {
+	plugin := &plugin.T128Metrics{BaseURL: "/example"}
+	err := plugin.Init()
+
+	require.Errorf(t, err, "max_simultaneous_requests must be greater than 0")
+}
+
+func TestLoadsFromToml(t *testing.T) {
+	expectedMetrics := []plugin.ConfiguredMetric{{
+		Name:       "cpu",
+		Fields:     map[string]string{"my_field": "field_value"},
+		Parameters: map[string][]string{"my_parameter": {"value1", "value2"}},
+	}}
+
+	plugin := &plugin.T128Metrics{}
+	exampleConfig := []byte(`
+	base_url = "example/base/url/"
+	unix_socket = "example.sock"
+	max_simultaneous_requests = 15
+	timeout = "500ms"
+	[[metric]]
+	name = "cpu"
+	[metric.fields]
+	  my_field = "field_value"
+	[metric.parameters]
+	  my_parameter = ["value1", "value2"]
+	`)
+
+	require.NoError(t, toml.Unmarshal(exampleConfig, plugin))
+	require.Equal(t, "example/base/url/", plugin.BaseURL)
+	require.Equal(t, "example.sock", plugin.UnixSocket)
+	require.Equal(t, 500*time.Millisecond, plugin.Timeout.Duration)
+	require.Equal(t, expectedMetrics, plugin.ConfiguredMetrics)
 }
 
 func createTestServer(t *testing.T, e []Endpoint) *httptest.Server {
