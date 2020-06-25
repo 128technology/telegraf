@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/influxdata/telegraf"
+	"github.com/influxdata/telegraf/internal"
 	"github.com/influxdata/telegraf/plugins/inputs"
 )
 
@@ -29,7 +30,7 @@ type T128Metrics struct {
 	BaseURL                 string             `toml:"base_url"`
 	UnixSocket              string             `toml:"unix_socket"`
 	ConfiguredMetrics       []ConfiguredMetric `toml:"metric"`
-	Timeout                 time.Duration      `toml:"timeout"`
+	Timeout                 internal.Duration  `toml:"timeout"`
 	MaxSimultaneousRequests int                `toml:"max_simultaneous_requests"`
 
 	client  *http.Client
@@ -45,7 +46,7 @@ type ConfiguredMetric struct {
 }
 
 var sampleConfig = `
-# Read metrics from a 128T instance
+## Read metrics from a 128T instance
 [[inputs.t128_metrics]]
 ## Required. The base url for metrics collection
 # base_url = "http://localhost:31517/api/v1/router/Fabric128/"
@@ -93,6 +94,10 @@ func (plugin *T128Metrics) Init() error {
 		plugin.BaseURL += "/"
 	}
 
+	if plugin.MaxSimultaneousRequests <= 0 {
+		return fmt.Errorf("max_simultaneous_requests must be greater than 0")
+	}
+
 	transport := http.DefaultTransport
 
 	if plugin.UnixSocket != "" {
@@ -103,7 +108,7 @@ func (plugin *T128Metrics) Init() error {
 		}
 	}
 
-	plugin.client = &http.Client{Transport: transport, Timeout: plugin.Timeout}
+	plugin.client = &http.Client{Transport: transport, Timeout: plugin.Timeout.Duration}
 	plugin.limiter = newRequestLimiter(plugin.MaxSimultaneousRequests)
 	plugin.metrics = configuredMetricsToRequestMetrics(plugin.ConfiguredMetrics)
 
@@ -272,7 +277,7 @@ func (l *requestLimiter) done() {
 func init() {
 	inputs.Add("t128_metrics", func() telegraf.Input {
 		return &T128Metrics{
-			Timeout:                 DefaultRequestTimeout,
+			Timeout:                 internal.Duration{Duration: DefaultRequestTimeout},
 			MaxSimultaneousRequests: DefaultMaxSimultaneousRequests,
 		}
 	})
