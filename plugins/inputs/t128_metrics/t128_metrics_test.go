@@ -31,6 +31,7 @@ var ResponseProcessingTestCases = []struct {
 	Endpoints         []Endpoint
 	ExpectedMetrics   []*testutil.Metric
 	ExpectedErrors    []string
+	IntegerConversion bool
 }{
 	{
 		Name:              "empty configured metrics produce no requests or metrics",
@@ -91,7 +92,32 @@ var ResponseProcessingTestCases = []struct {
 		ExpectedErrors: nil,
 	},
 	{
-		Name: "forms int value if it is numeric",
+		Name:              "forms float value if integer conversion is disabled",
+		IntegerConversion: false,
+		ConfiguredMetrics: []plugin.ConfiguredMetric{{
+			"test-metric",
+			map[string]string{"test-field": "stats/test"},
+			map[string][]string{},
+		}},
+		Endpoints: []Endpoint{{"/stats/test", 200, "{}", `[{
+			"id": "/stats/test-metric",
+			"permutations": [{
+				"parameters": [],
+				"value": "50"
+			}]
+		}]`}},
+		ExpectedMetrics: []*testutil.Metric{
+			{
+				Measurement: "test-metric",
+				Tags:        map[string]string{},
+				Fields:      map[string]interface{}{"test-field": 50.0},
+			},
+		},
+		ExpectedErrors: nil,
+	},
+	{
+		Name:              "forms integer value if integer conversion is enabled",
+		IntegerConversion: true,
 		ConfiguredMetrics: []plugin.ConfiguredMetric{{
 			"test-metric",
 			map[string]string{"test-field": "stats/test"},
@@ -114,7 +140,7 @@ var ResponseProcessingTestCases = []struct {
 		ExpectedErrors: nil,
 	},
 	{
-		Name: "forms float value if it is numeric",
+		Name: "forms float value if it is a float",
 		ConfiguredMetrics: []plugin.ConfiguredMetric{{
 			"test-metric",
 			map[string]string{"test-field": "stats/test"},
@@ -137,7 +163,8 @@ var ResponseProcessingTestCases = []struct {
 		ExpectedErrors: nil,
 	},
 	{
-		Name: "adds permutation parameters to metrics",
+		Name:              "adds permutation parameters to metrics",
+		IntegerConversion: true,
 		ConfiguredMetrics: []plugin.ConfiguredMetric{{
 			"test-metric",
 			map[string]string{"test-field": "stats/test"},
@@ -169,7 +196,8 @@ var ResponseProcessingTestCases = []struct {
 		ExpectedErrors: nil,
 	},
 	{
-		Name: "produces multiple metrics for multiple permutations",
+		Name:              "produces multiple metrics for multiple permutations",
+		IntegerConversion: true,
 		ConfiguredMetrics: []plugin.ConfiguredMetric{{
 			"test-metric",
 			map[string]string{"test-field": "stats/test"},
@@ -213,7 +241,8 @@ var ResponseProcessingTestCases = []struct {
 		ExpectedErrors: nil,
 	},
 	{
-		Name: "hits multiple endpoints",
+		Name:              "hits multiple endpoints",
+		IntegerConversion: true,
 		ConfiguredMetrics: []plugin.ConfiguredMetric{{
 			"test-metric",
 			map[string]string{"test-field": "stats/test"},
@@ -279,7 +308,8 @@ var ResponseProcessingTestCases = []struct {
 		},
 	},
 	{
-		Name: "mixes errors and valid results",
+		Name:              "mixes errors and valid results",
+		IntegerConversion: true,
 		ConfiguredMetrics: []plugin.ConfiguredMetric{{
 			"404",
 			map[string]string{"field": "stats/404"},
@@ -380,6 +410,7 @@ func TestT128MetricsResponseProcessing(t *testing.T) {
 				BaseURL:                 fakeServer.URL,
 				MaxSimultaneousRequests: 20,
 				ConfiguredMetrics:       testCase.ConfiguredMetrics,
+				UseIntegerConversion:    testCase.IntegerConversion,
 			}
 
 			var acc testutil.Accumulator
@@ -529,16 +560,17 @@ func TestLoadsFromToml(t *testing.T) {
 
 	plugin := &plugin.T128Metrics{}
 	exampleConfig := []byte(`
-	base_url                    = "example/base/url/"
-	unix_socket                 = "example.sock"
-	max_simultaneous_requests   = 15
-	timeout                     = "500ms"
-	[[metric]]
-	  name = "cpu"
-	  [metric.fields]
-	    my_field = "field_value"
-	  [metric.parameters]
-	    my_parameter = ["value1", "value2"]
+		base_url                    = "example/base/url/"
+		unix_socket                 = "example.sock"
+		max_simultaneous_requests   = 15
+		timeout                     = "500ms"
+		use_integer_conversion		= true
+		[[metric]]
+		name = "cpu"
+		[metric.fields]
+			my_field = "field_value"
+		[metric.parameters]
+			my_parameter = ["value1", "value2"]
 	`)
 
 	require.NoError(t, toml.Unmarshal(exampleConfig, plugin))
@@ -546,6 +578,7 @@ func TestLoadsFromToml(t *testing.T) {
 	require.Equal(t, "example.sock", plugin.UnixSocket)
 	require.Equal(t, 500*time.Millisecond, plugin.Timeout.Duration)
 	require.Equal(t, expectedMetrics, plugin.ConfiguredMetrics)
+	require.True(t, plugin.UseIntegerConversion)
 }
 
 func createTestServer(t *testing.T, e []Endpoint) *httptest.Server {
