@@ -1,3 +1,15 @@
+## v1.14.5 [2020-06-30]
+
+### Bugfixes
+
+- [#7686](https://github.com/influxdata/telegraf/pull/7686): Improve the performance of the procstat input.
+- [#7658](https://github.com/influxdata/telegraf/pull/7658): Fix ping exit code handling on non-Linux.
+- [#7718](https://github.com/influxdata/telegraf/pull/7718): Skip overs errors in the output of the sensors command.
+- [#7748](https://github.com/influxdata/telegraf/issues/7748): Prevent startup when tags have incorrect type in configuration file.
+- [#7699](https://github.com/influxdata/telegraf/issues/7699): Fix panic with GJSON multiselect query in json parser.
+- [#7754](https://github.com/influxdata/telegraf/issues/7754): Allow any key usage type on x509 certificate.
+- [#7705](https://github.com/influxdata/telegraf/issues/7705): Allow histograms and summary types without buckets or quantiles in prometheus_client output.
+
 ## v1.14.4 [2020-06-09]
 
 #### Bugfixes
