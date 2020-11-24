@@ -131,7 +131,7 @@ def parse_args():
     arg_parser.add_argument(
         "--docker-file",
         help="The docker file to use for the container",
-        default=(SCRIPTS / "ci-1.13.docker"),
+        default=(SCRIPTS / "ci-1.15.docker"),
     )
 
     args = arg_parser.parse_args()
