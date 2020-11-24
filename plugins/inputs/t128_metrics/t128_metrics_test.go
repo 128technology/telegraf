@@ -532,7 +532,7 @@ func TestTimoutUsedForRequests(t *testing.T) {
 	require.EqualError(
 		t,
 		acc.Errors[0],
-		fmt.Sprintf("failed to retrieve metric stats/test: Post %s/stats/test: net/http: request canceled (Client.Timeout exceeded while awaiting headers)", fakeServer.URL))
+		fmt.Sprintf("failed to retrieve metric stats/test: Post \"%s/stats/test\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)", fakeServer.URL))
 
 	fakeServer.Close()
 }
