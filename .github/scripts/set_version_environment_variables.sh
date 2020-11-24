@@ -8,10 +8,14 @@ if [ -z $BASH_REMATCH ]; then
     exit 1
 fi
 
-echo "VERSION=${BASH_REMATCH[1]}" >> $GITHUB_ENV
+VERSION=${BASH_REMATCH[1]}
 
 if [ ! -z ${BASH_REMATCH[3]} ]; then
-    echo "VERSION_PATCH=${BASH_REMATCH[3]}" >> $GITHUB_ENV
+    VERSION_PATCH=${BASH_REMATCH[3]}
 else
-    echo "VERSION_PATCH=1" >> $GITHUB_ENV
+    VERSION_PATCH=1
 fi
+
+echo "VERSION=${VERSION}" >> $GITHUB_ENV
+echo "VERSION_PATCH=${VERSION_PATCH}" >> $GITHUB_ENV
+echo "RPM_NAME=telegraf-128tech-${VERSION}-${VERSION_PATCH}.x86_64.rpm" >> $GITHUB_ENV
