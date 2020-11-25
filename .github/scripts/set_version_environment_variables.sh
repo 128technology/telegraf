@@ -8,10 +8,10 @@ if [ -z $BASH_REMATCH ]; then
     exit 1
 fi
 
-echo "::set-env name=VERSION::${BASH_REMATCH[1]}"
+echo "VERSION=${BASH_REMATCH[1]}" >> $GITHUB_ENV
 
 if [ ! -z ${BASH_REMATCH[3]} ]; then
-    echo "::set-env name=VERSION_PATCH::${BASH_REMATCH[3]}"
+    echo "VERSION_PATCH=${BASH_REMATCH[3]}" >> $GITHUB_ENV
 else
-    echo "::set-env name=VERSION_PATCH::1"
+    echo "VERSION_PATCH=1" >> $GITHUB_ENV
 fi
