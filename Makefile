@@ -5,37 +5,38 @@ commit := $(shell git rev-parse --short=8 HEAD)
 glibc_version := 2.17
 
 ifdef NIGHTLY
-	version := $(next_version)
-	rpm_version := nightly
-	rpm_iteration := 0
-	deb_version := nightly
-	deb_iteration := 0
-	tar_version := nightly
+	version ?= $(next_version)
+	rpm_version ?= nightly
+	rpm_iteration ?= 0
+	deb_version ?= nightly
+	deb_iteration ?= 0
+	tar_version ?= nightly
 else ifeq ($(tag),)
-	version := $(next_version)
-	rpm_version := $(version)~$(commit)-0
-	rpm_iteration := 0
-	deb_version := $(version)~$(commit)-0
-	deb_iteration := 0
-	tar_version := $(version)~$(commit)
+	version ?= $(next_version)
+	rpm_version ?= $(version)~$(commit)-0
+	rpm_iteration ?= 0
+	deb_version ?= $(version)~$(commit)-0
+	deb_iteration ?= 0
+	tar_version ?= $(version)~$(commit)
 else ifneq ($(findstring -rc,$(tag)),)
-	version := $(word 1,$(subst -, ,$(tag)))
-	version := $(version:v%=%)
+	version_tag := $(word 1,$(subst -, ,$(tag)))
+	version ?= $(version_tag:v%=%)
 	rc := $(word 2,$(subst -, ,$(tag)))
-	rpm_version := $(version)-0.$(rc)
-	rpm_iteration := 0.$(subst rc,,$(rc))
-	deb_version := $(version)~$(rc)-1
-	deb_iteration := 0
-	tar_version := $(version)~$(rc)
+	rpm_version ?= $(version)-0.$(rc)
+	rpm_iteration ?= 0.$(subst rc,,$(rc))
+	deb_version ?= $(version)~$(rc)-1
+	deb_iteration ?= 0
+	tar_version ?= $(version)~$(rc)
 else
-	version := $(tag:v%=%)
-	rpm_version := $(version)-1
-	rpm_iteration := 1
-	deb_version := $(version)-1
-	deb_iteration := 1
-	tar_version := $(version)
+	version ?= $(tag:v%=%)
+	rpm_version ?= $(version)-1
+	rpm_iteration ?= 1
+	deb_version ?= $(version)-1
+	deb_iteration ?= 1
+	tar_version ?= $(version)
 endif
 
+NAME ?= telegraf
 MAKEFLAGS += --no-print-directory
 GOOS ?= $(shell go env GOOS)
 GOARCH ?= $(shell go env GOARCH)
@@ -204,37 +205,37 @@ $(buildbin):
 	@mkdir -pv $(dir $@)
 	go build -o $(dir $@) -ldflags "$(LDFLAGS)" ./cmd/telegraf
 
-debs := telegraf_$(deb_version)_amd64.deb
-debs += telegraf_$(deb_version)_arm64.deb
-debs += telegraf_$(deb_version)_armel.deb
-debs += telegraf_$(deb_version)_armhf.deb
-debs += telegraf_$(deb_version)_i386.deb
-debs += telegraf_$(deb_version)_mips.deb
-debs += telegraf_$(deb_version)_mipsel.deb
-debs += telegraf_$(deb_version)_s390x.deb
+debs := $(NAME)_$(deb_version)_amd64.deb
+debs += $(NAME)_$(deb_version)_arm64.deb
+debs += $(NAME)_$(deb_version)_armel.deb
+debs += $(NAME)_$(deb_version)_armhf.deb
+debs += $(NAME)_$(deb_version)_i386.deb
+debs += $(NAME)_$(deb_version)_mips.deb
+debs += $(NAME)_$(deb_version)_mipsel.deb
+debs += $(NAME)_$(deb_version)_s390x.deb
 
-rpms += telegraf-$(rpm_version).aarch64.rpm
-rpms += telegraf-$(rpm_version).armel.rpm
-rpms += telegraf-$(rpm_version).armv6hl.rpm
-rpms += telegraf-$(rpm_version).i386.rpm
-rpms += telegraf-$(rpm_version).s390x.rpm
-rpms += telegraf-$(rpm_version).x86_64.rpm
+rpms += $(NAME)-$(rpm_version).aarch64.rpm
+rpms += $(NAME)-$(rpm_version).armel.rpm
+rpms += $(NAME)-$(rpm_version).armv6hl.rpm
+rpms += $(NAME)-$(rpm_version).i386.rpm
+rpms += $(NAME)-$(rpm_version).s390x.rpm
+rpms += $(NAME)-$(rpm_version).x86_64.rpm
 
-tars += telegraf-$(tar_version)_darwin_amd64.tar.gz
-tars += telegraf-$(tar_version)_freebsd_amd64.tar.gz
-tars += telegraf-$(tar_version)_freebsd_i386.tar.gz
-tars += telegraf-$(tar_version)_linux_amd64.tar.gz
-tars += telegraf-$(tar_version)_linux_arm64.tar.gz
-tars += telegraf-$(tar_version)_linux_armel.tar.gz
-tars += telegraf-$(tar_version)_linux_armhf.tar.gz
-tars += telegraf-$(tar_version)_linux_i386.tar.gz
-tars += telegraf-$(tar_version)_linux_mips.tar.gz
-tars += telegraf-$(tar_version)_linux_mipsel.tar.gz
-tars += telegraf-$(tar_version)_linux_s390x.tar.gz
-tars += telegraf-$(tar_version)_static_linux_amd64.tar.gz
+tars += $(NAME)-$(tar_version)_darwin_amd64.tar.gz
+tars += $(NAME)-$(tar_version)_freebsd_amd64.tar.gz
+tars += $(NAME)-$(tar_version)_freebsd_i386.tar.gz
+tars += $(NAME)-$(tar_version)_linux_amd64.tar.gz
+tars += $(NAME)-$(tar_version)_linux_arm64.tar.gz
+tars += $(NAME)-$(tar_version)_linux_armel.tar.gz
+tars += $(NAME)-$(tar_version)_linux_armhf.tar.gz
+tars += $(NAME)-$(tar_version)_linux_i386.tar.gz
+tars += $(NAME)-$(tar_version)_linux_mips.tar.gz
+tars += $(NAME)-$(tar_version)_linux_mipsel.tar.gz
+tars += $(NAME)-$(tar_version)_linux_s390x.tar.gz
+tars += $(NAME)-$(tar_version)_static_linux_amd64.tar.gz
 
-zips += telegraf-$(tar_version)_windows_amd64.zip
-zips += telegraf-$(tar_version)_windows_i386.zip
+zips += $(NAME)-$(tar_version)_windows_amd64.zip
+zips += $(NAME)-$(tar_version)_windows_i386.zip
 
 dists := $(debs) $(rpms) $(tars) $(zips)
 
@@ -271,7 +272,7 @@ $(rpms):
 		--depends coreutils \
 		--depends shadow-utils \
 		--rpm-posttrans scripts/rpm/post-install.sh \
-		--name telegraf \
+		--name $(NAME) \
 		--version $(version) \
 		--iteration $(rpm_iteration) \
         --chdir $(DESTDIR) \
@@ -307,7 +308,7 @@ $(debs):
 		--after-remove scripts/deb/post-remove.sh \
 		--before-remove scripts/deb/pre-remove.sh \
 		--description "Plugin-driven server agent for reporting metrics into InfluxDB." \
-		--name telegraf \
+		--name $(NAME) \
 		--version $(version) \
 		--iteration $(deb_iteration) \
 		--chdir $(DESTDIR) \
