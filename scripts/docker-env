@@ -23,7 +23,6 @@ def main():
 
 def build(args):
     env = {
-        **os.environ,
         "NAME": "telegraf-128tech",
         "version": args.version,
         "rpm_iteration": args.release,
@@ -31,13 +30,25 @@ def build(args):
     }
 
     try:
+        if args.clean:
+            subprocess.run(
+                build_docker_command(
+                    args.docker_file,
+                    ["make", "clean"],
+                ),
+                check=True
+            )
+
         subprocess.run(
-            ["make", f"telegraf-128tech-{args.version}-{args.release}.x86_64.rpm"],
-            env=env,
+            build_docker_command(
+                args.docker_file,
+                ["make", f"telegraf-128tech-{args.version}-{args.release}.x86_64.rpm"],
+                environment=env,
+            ),
             check=True
         )
     except subprocess.CalledProcessError as error:
-        print("Failed to build the RPM: {error}")
+        print(f"Failed to build the RPM: {error}")
         sys.exit(1)
 
 
@@ -51,15 +62,18 @@ def create_docker_env(docker_file):
             ["docker", "build", "-t", IMAGE_NAME, "-f", docker_file, SCRIPTS]
         )
     except subprocess.CalledProcessError as error:
-        print("Failed to build the docker image")
+        print(f"Failed to build the docker image: {error}")
         sys.exit(1)
 
 
-def build_docker_command(docker_file, internal_cmd, interactive=False):
+def build_docker_command(docker_file, internal_cmd, interactive=False, environment=None):
     cmd = [
         "docker",
         "run",
     ]
+
+    for key, value in (environment or {}).items():
+        cmd.extend(["-e", f"{key}={value}"])
 
     if internal_cmd:
         cmd.append("-it")
@@ -105,11 +119,17 @@ def parse_args():
     )
 
     build_parser.add_argument(
-        "--release", help="The release version to use for the RPM", default=1
+        "--release", help="The release version to use for the RPM", default="1"
     )
 
     build_parser.add_argument(
         "--name", help="The name the RPM should have", default="telegraf-128tech"
+    )
+
+    build_parser.add_argument(
+        "--clean", help="Clean existing artifacts before building",
+        default=False,
+        action="store_true"
     )
 
     build_parser.add_argument(
