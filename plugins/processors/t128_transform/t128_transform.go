@@ -1,4 +1,4 @@
-package rename
+package t128_transform
 
 import (
 	"fmt"
@@ -13,27 +13,35 @@ import (
 
 const sampleConfig = `
 	## If more than this amount of time passes between data points, the
-	## previous value will be considered old and the rate will be recalculated
+	## previous value will be considered old and the value will be recalculated
 	## as if it hadn't been seen before. A zero expiration means never expire.
 	# expiration = "0s"
+
+	## The operation that should be performed between two observed points.
+	## It can be 'diff' or 'rate'
+	# transform = "rate"
 
 	## For the fields who's key/value pairs don't match, should the original
 	## field be removed?
 	# remove-original = true
 
-[processors.t128_rate.fields]
-	## Replace fields with their rates, renaming them if indicated
+[processors.t128_transform.fields]
+	## Replace fields with their computed values, renaming them if indicated
 	# "/rate/metric" = "/total/metric"
 	# "/inline/replace" = "/inline/replace"
 `
 
-type T128Rate struct {
+type transformer = func(t1, t2 time.Time, v1, v2 float64) (float64, error)
+
+type T128Transform struct {
 	Fields         map[string]string `toml:"fields"`
 	Expiration     internal.Duration `toml:"expiration"`
 	RemoveOriginal bool              `toml:"remove-original"`
+	Transform      string            `toml:"transform"`
 
 	Log telegraf.Logger `toml:"-"`
 
+	transform    transformer
 	targetFields map[string]target
 	cache        map[uint64]map[string]observedValue
 }
@@ -44,19 +52,20 @@ type target struct {
 }
 
 type observedValue struct {
-	value   float64
-	expires time.Time
+	value     float64
+	expires   time.Time
+	timestamp time.Time
 }
 
-func (r *T128Rate) SampleConfig() string {
+func (r *T128Transform) SampleConfig() string {
 	return sampleConfig
 }
 
-func (r *T128Rate) Description() string {
-	return "Compute the rate of fields that pass through this filter."
+func (r *T128Transform) Description() string {
+	return "Transform metrics based on the differences between two observed points."
 }
 
-func (r *T128Rate) Apply(in ...telegraf.Metric) []telegraf.Metric {
+func (r *T128Transform) Apply(in ...telegraf.Metric) []telegraf.Metric {
 	for _, point := range in {
 		seriesHash := point.HashID()
 
@@ -70,7 +79,7 @@ func (r *T128Rate) Apply(in ...telegraf.Metric) []telegraf.Metric {
 
 			currentValue, converted := convert(field.Value)
 			if !converted {
-				r.Log.Warnf("Failed to convert field '%s' to float for a rate calculation. The rate computation will be skipped.")
+				r.Log.Warnf("Failed to convert field '%s' to float for transformation. This transformation will be skipped.")
 				continue
 			}
 
@@ -79,21 +88,27 @@ func (r *T128Rate) Apply(in ...telegraf.Metric) []telegraf.Metric {
 				r.cache[seriesHash] = make(map[string]observedValue, 0)
 			}
 
-			rateAdded := false
+			itemAdded := false
 			if observed, ok := cacheFields[field.Key]; ok {
 				if point.Time().Before(observed.expires) {
-					point.AddField(target.key, currentValue-observed.value)
-					rateAdded = true
+					value, err := r.transform(observed.timestamp, point.Time(), observed.value, currentValue)
+					if err != nil {
+						r.Log.Warnf("excluding failed transform: %v", err)
+					} else {
+						point.AddField(target.key, value)
+						itemAdded = true
+					}
 				}
 			}
 
-			if (target.matchesSource && !rateAdded) || (!target.matchesSource && r.RemoveOriginal) {
+			if (target.matchesSource && !itemAdded) || (!target.matchesSource && r.RemoveOriginal) {
 				removeFields = append(removeFields, field.Key)
 			}
 
 			r.cache[seriesHash][field.Key] = observedValue{
-				value:   currentValue,
-				expires: point.Time().Add(r.Expiration.Duration),
+				value:     currentValue,
+				expires:   point.Time().Add(r.Expiration.Duration),
+				timestamp: point.Time(),
 			}
 		}
 
@@ -105,9 +120,29 @@ func (r *T128Rate) Apply(in ...telegraf.Metric) []telegraf.Metric {
 	return in
 }
 
-func (r *T128Rate) Init() error {
+func (r *T128Transform) Init() error {
 	if len(r.Fields) == 0 {
 		return fmt.Errorf("at least one value must be specified in the 'fields' list")
+	}
+
+	switch r.Transform {
+	case "diff":
+		r.transform = func(t1, t2 time.Time, v1, v2 float64) (float64, error) {
+			return v2 - v1, nil
+		}
+	case "rate":
+		r.transform = func(t1, t2 time.Time, v1, v2 float64) (float64, error) {
+			if !t1.Before(t2) {
+				return 0, fmt.Errorf(
+					"asked to compute the rate between points with non-increasing timestamps: %v at %v and %v at %v",
+					v1, t1, v2, t2,
+				)
+			}
+
+			return (v2 - v1) / (t2.Sub(t1).Seconds()), nil
+		}
+	default:
+		return fmt.Errorf("'transform' is required and must be 'diff' or 'rate'")
 	}
 
 	for dest, src := range r.Fields {
@@ -137,16 +172,17 @@ func (r *T128Rate) Init() error {
 	return nil
 }
 
-func newRate() *T128Rate {
-	return &T128Rate{
+func newTransform() *T128Transform {
+	return &T128Transform{
+		Transform:    "rate",
 		targetFields: make(map[string]target),
 		cache:        make(map[uint64]map[string]observedValue),
 	}
 }
 
 func init() {
-	processors.Add("t128_rate", func() telegraf.Processor {
-		return newRate()
+	processors.Add("t128_transform", func() telegraf.Processor {
+		return newTransform()
 	})
 }
 

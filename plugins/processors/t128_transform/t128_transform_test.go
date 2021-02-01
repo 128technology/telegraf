@@ -1,4 +1,4 @@
-package rename
+package t128_transform
 
 import (
 	"testing"
@@ -6,6 +6,7 @@ import (
 
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/metric"
+	"github.com/influxdata/telegraf/testutil"
 	"github.com/influxdata/toml"
 	"github.com/stretchr/testify/assert"
 )
@@ -22,7 +23,7 @@ func newMetric(name string, tags map[string]string, fields map[string]interface{
 }
 
 func TestRemovesFirstSample(t *testing.T) {
-	r := newRate()
+	r := newTransform()
 	r.Fields = map[string]string{"/my/rate": "/my/rate"}
 	assert.Nil(t, r.Init())
 
@@ -34,7 +35,7 @@ func TestRemovesFirstSample(t *testing.T) {
 }
 
 func TestRemovesExpiredSample(t *testing.T) {
-	r := newRate()
+	r := newTransform()
 	r.Fields = map[string]string{"/my/rate": "/my/rate"}
 	r.Expiration.Duration = 10 * time.Second
 	assert.Nil(t, r.Init())
@@ -52,93 +53,82 @@ func TestRemovesExpiredSample(t *testing.T) {
 	assert.Len(t, r.Apply(m3)[0].FieldList(), 0)
 }
 
-func TestCalculatesInitialRate(t *testing.T) {
-	r := newRate()
-	r.Fields = map[string]string{
-		"/my/rate": "/my/rate",
+func TestCalculatesDiffs(t *testing.T) {
+	cases := []struct {
+		transform string
+		value     float64
+	}{
+		{
+			transform: "diff",
+			value:     10,
+		},
+		{
+			transform: "rate",
+			value:     5,
+		},
 	}
 
-	assert.Nil(t, r.Init())
+	for _, testCase := range cases {
+		t.Run(testCase.transform, func(t *testing.T) {
+			r := newTransform()
+			r.Fields = map[string]string{
+				"/my/rate": "/my/rate",
+			}
+			r.Transform = testCase.transform
+			r.Expiration.Duration = 5 * time.Second
 
-	t1 := time.Now()
-	t2 := t1.Add(time.Second * 1)
+			assert.Nil(t, r.Init())
 
-	m1 := newMetric("foo", nil, map[string]interface{}{"/my/rate": 50}, t1)
-	m2 := newMetric("foo", nil, map[string]interface{}{"/my/rate": 60}, t2)
+			t1 := time.Now()
+			t2 := t1.Add(time.Second * 2)
+			t3 := t2.Add(time.Second * 2)
 
-	rate := r.Apply(m1)
-	assert.Len(t, rate, 1)
-	assert.Empty(t, rate[0].FieldList())
+			// expire at t4
+			t4 := t3.Add(time.Second * 6)
+			t5 := t4.Add(time.Second * 2)
 
-	rate = r.Apply(m2)
-	assert.Len(t, rate, 1)
+			m1 := newMetric("foo", nil, map[string]interface{}{"/my/rate": 50}, t1)
+			m2 := newMetric("foo", nil, map[string]interface{}{"/my/rate": 60}, t2)
+			m3 := newMetric("foo", nil, map[string]interface{}{"/my/rate": 70}, t3)
+			m4 := newMetric("foo", nil, map[string]interface{}{"/my/rate": 80}, t4)
+			m5 := newMetric("foo", nil, map[string]interface{}{"/my/rate": 90}, t5)
 
-	assert.Equal(t, newMetric("foo", nil, map[string]interface{}{"/my/rate": float64(10)}, t2), rate[0])
-}
+			// nothing on first item
+			results := r.Apply(m1)
+			assert.Len(t, results, 1)
+			assert.Len(t, results[0].FieldList(), 0)
 
-func TestCalculatesRateAfterExpiration(t *testing.T) {
-	r := newRate()
-	r.Fields = map[string]string{
-		"/my/rate": "/my/rate",
-	}
-	r.Expiration.Duration = time.Second * 1
+			// starts reporting on the second observation
+			results = r.Apply(m2)
+			expected := newMetric("foo", nil, map[string]interface{}{"/my/rate": testCase.value}, t2)
 
-	assert.Nil(t, r.Init())
+			assert.Len(t, results, 1)
+			assert.Equal(t, expected, results[0])
 
-	t1 := time.Now()
-	t2 := t1.Add(time.Second * 5)
-	t3 := t2.Add(time.Second * 1)
+			// continues reporting rates based on prior value
+			results = r.Apply(m3)
+			expected = newMetric("foo", nil, map[string]interface{}{"/my/rate": testCase.value}, t3)
 
-	m1 := newMetric("foo", nil, map[string]interface{}{"/my/rate": 50}, t1)
-	m2 := newMetric("foo", nil, map[string]interface{}{"/my/rate": 60}, t2)
-	m3 := newMetric("foo", nil, map[string]interface{}{"/my/rate": 65}, t3)
+			assert.Len(t, results, 1)
+			assert.Equal(t, expected, results[0])
 
-	r.Apply(m1)
+			// doesn't report expired value
+			results = r.Apply(m4)
+			assert.Len(t, results, 1)
+			assert.Len(t, results[0].FieldList(), 0)
 
-	processorResult := r.Apply(m2)
-	assert.Len(t, processorResult, 1)
-	assert.Empty(t, processorResult[0].FieldList())
+			// resumes reporting after an expiration
+			results = r.Apply(m5)
+			expected = newMetric("foo", nil, map[string]interface{}{"/my/rate": testCase.value}, t5)
 
-	processorResult = r.Apply(m3)
-	assert.Len(t, processorResult, 1)
-	assert.Equal(t, newMetric("foo", nil, map[string]interface{}{"/my/rate": float64(5)}, t3), processorResult[0])
-}
-
-func TestCalculatesRatesOverTime(t *testing.T) {
-	r := newRate()
-	r.Fields = map[string]string{
-		"/my/rate":       "/my/rate",
-		"/my/other/rate": "/my/other/total",
-	}
-
-	assert.Nil(t, r.Init())
-
-	t1 := time.Now()
-	t2 := t1.Add(time.Second * 1)
-	t3 := t2.Add(time.Second * 1)
-	t4 := t3.Add(time.Second * 1)
-
-	m1 := newMetric("foo", nil, map[string]interface{}{"/my/rate": 50}, t1)
-	m2 := newMetric("foo", nil, map[string]interface{}{"/my/rate": 60}, t2)
-	m3 := newMetric("foo", nil, map[string]interface{}{"/my/rate": 65}, t3)
-	m4 := newMetric("foo", nil, map[string]interface{}{"/my/rate": 65}, t4)
-
-	r.Apply(m1)
-
-	metrics := []telegraf.Metric{m2, m3, m4}
-	rates := []float64{10, 5, 0}
-
-	for i := 0; i < 3; i++ {
-		processorResult := r.Apply(metrics[i])
-		assert.Len(t, processorResult, 1)
-
-		resultMetric := processorResult[0]
-		assert.Equal(t, newMetric("foo", nil, map[string]interface{}{"/my/rate": rates[i]}, metrics[i].Time()), resultMetric)
+			assert.Len(t, results, 1)
+			assert.Equal(t, expected, results[0])
+		})
 	}
 }
 
 func TestLeavesUnmarkedFieldsInTact(t *testing.T) {
-	r := newRate()
+	r := newTransform()
 	r.Fields = map[string]string{"/my/rate": "/my/rate"}
 	assert.Nil(t, r.Init())
 
@@ -291,7 +281,7 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.Name, func(t *testing.T) {
-			r := newRate()
+			r := newTransform()
 			r.Fields = testCase.Fields
 			r.RemoveOriginal = testCase.RemoveOriginal
 			r.Expiration.Duration = 5 * time.Second
@@ -314,8 +304,31 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 	}
 }
 
+func TestFailsRateOnNonIncreasingTimestamp(t *testing.T) {
+	r := newTransform()
+	r.Fields = map[string]string{
+		"/my/rate": "/my/rate",
+	}
+	r.Log = testutil.Logger{}
+	assert.Nil(t, r.Init())
+
+	t1 := time.Now()
+	t2 := t1
+	t3 := t1.Add(-time.Second * 1)
+
+	apply := func(timestamp time.Time) []telegraf.Metric {
+		return r.Apply(newMetric("foo", nil, map[string]interface{}{"/my/rate": 50}, timestamp))
+	}
+
+	for _, timestamp := range []time.Time{t1, t2, t3} {
+		outputs := apply(timestamp)
+		assert.Len(t, outputs, 1)
+		assert.Len(t, outputs[0].FieldList(), 0)
+	}
+}
+
 func TestFailsOnConflictingFieldMappings(t *testing.T) {
-	r := newRate()
+	r := newTransform()
 	r.Fields = map[string]string{
 		"/my/rate":       "/my/total",
 		"/my/other/rate": "/my/total",
@@ -324,11 +337,20 @@ func TestFailsOnConflictingFieldMappings(t *testing.T) {
 	assert.EqualError(t, r.Init(), "both '/my/other/rate' and '/my/rate' are configured to be calculated from '/my/total'")
 }
 
+func TestFailsOnInvalidTransform(t *testing.T) {
+	r := newTransform()
+	r.Fields = map[string]string{"/my/rate": "/my/rate"}
+	r.Transform = "invalid"
+
+	assert.EqualError(t, r.Init(), "'transform' is required and must be 'diff' or 'rate'")
+}
+
 func TestLoadsFromToml(t *testing.T) {
 
-	plugin := &T128Rate{}
+	plugin := &T128Transform{}
 	exampleConfig := []byte(`
 		expiration = "10s"
+		transform = "diff"
 
 		[fields]
 			"/my/rate" = "/my/total"
@@ -338,4 +360,5 @@ func TestLoadsFromToml(t *testing.T) {
 	assert.NoError(t, toml.Unmarshal(exampleConfig, plugin))
 	assert.Equal(t, map[string]string{"/my/rate": "/my/total", "/other/rate": "/other/total"}, plugin.Fields)
 	assert.Equal(t, plugin.Expiration.Duration, 10*time.Second)
+	assert.Equal(t, "diff", plugin.Transform)
 }
