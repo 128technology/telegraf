@@ -18,12 +18,13 @@ func MustMetric(v telegraf.Metric, err error) telegraf.Metric {
 }
 
 var tests = []struct {
-	name        string
-	maxBytes    int
-	typeSupport FieldTypeSupport
-	input       telegraf.Metric
-	output      []byte
-	errReason   string
+	name           string
+	maxBytes       int
+	typeSupport    FieldTypeSupport
+	input          telegraf.Metric
+	output         []byte
+	errReason      string
+	timestampUnits time.Duration
 }{
 	{
 		name: "minimal",
@@ -230,7 +231,7 @@ var tests = []struct {
 		output: []byte("cpu value=\"howdy\" 0\n"),
 	},
 	{
-		name: "timestamp",
+		name: "default timestamp",
 		input: MustMetric(
 			metric.New(
 				"cpu",
@@ -242,6 +243,21 @@ var tests = []struct {
 			),
 		),
 		output: []byte("cpu value=42 1519194109000000042\n"),
+	},
+	{
+		name: "timestamp second units",
+		input: MustMetric(
+			metric.New(
+				"cpu",
+				map[string]string{},
+				map[string]interface{}{
+					"value": 42.0,
+				},
+				time.Unix(1519194109, 42),
+			),
+		),
+		timestampUnits: time.Second,
+		output:         []byte("cpu value=42 1519194109\n"),
 	},
 	{
 		name:     "split fields exact",
@@ -539,6 +555,7 @@ func TestSerializer(t *testing.T) {
 			serializer.SetMaxLineBytes(tt.maxBytes)
 			serializer.SetFieldSortOrder(SortFields)
 			serializer.SetFieldTypeSupport(tt.typeSupport)
+			serializer.SetTimestampUnits(tt.timestampUnits)
 			output, err := serializer.Serialize(tt.input)
 			if tt.errReason != "" {
 				require.Error(t, err)
@@ -555,6 +572,7 @@ func BenchmarkSerializer(b *testing.B) {
 			serializer := NewSerializer()
 			serializer.SetMaxLineBytes(tt.maxBytes)
 			serializer.SetFieldTypeSupport(tt.typeSupport)
+			serializer.SetTimestampUnits(tt.timestampUnits)
 			for n := 0; n < b.N; n++ {
 				output, err := serializer.Serialize(tt.input)
 				_ = err
