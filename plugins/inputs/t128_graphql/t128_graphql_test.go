@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/influxdata/telegraf"
+	"github.com/influxdata/telegraf/internal"
 	plugin "github.com/influxdata/telegraf/plugins/inputs/t128_graphql"
 	"github.com/influxdata/telegraf/testutil"
 	"github.com/stretchr/testify/require"
@@ -22,16 +23,16 @@ type Endpoint struct {
 }
 
 const (
-	ValidExpectedRequestNoTag     = `{"query":"query MyQuery{allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\n}}}}}}}"}`
-	ValidQueryNoTag               = "query MyQuery{allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\n}}}}}}}"
-	ValidExpectedRequestSingleTag = `{"query":"query MyQuery{allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag\n}}}}}}}"}`
-	ValidQuerySingleTag           = "query MyQuery{allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag\n}}}}}}}"
-	ValidExpectedRequestDoubleTag = `{"query":"query MyQuery{allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag-1\ntest-tag-2\n}}}}}}}"}`
-	ValidQueryDoubleTag           = "query MyQuery{allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag-1\ntest-tag-2\n}}}}}}}"
-	InvalidRouterExpectedRequest  = `{"query":"query MyQuery{allRouters(name:\"not-a-router\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\n}}}}}}}"}`
-	InvalidRouterQuery            = "query MyQuery{allRouters(name:\"not-a-router\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\n}}}}}}}"
-	InvalidFieldExpectedRequest   = `{"query":"query MyQuery{allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ninvalid-field\n}}}}}}}"}`
-	InvalidFieldQuery             = "query MyQuery{allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ninvalid-field\n}}}}}}}"
+	ValidExpectedRequestNoTag     = `{"query":"query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\n}}}}}}}"}`
+	ValidQueryNoTag               = "query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\n}}}}}}}"
+	ValidExpectedRequestSingleTag = `{"query":"query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag\n}}}}}}}"}`
+	ValidQuerySingleTag           = "query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag\n}}}}}}}"
+	ValidExpectedRequestDoubleTag = `{"query":"query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag-1\ntest-tag-2\n}}}}}}}"}`
+	ValidQueryDoubleTag           = "query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag-1\ntest-tag-2\n}}}}}}}"
+	InvalidRouterExpectedRequest  = `{"query":"query {allRouters(name:\"not-a-router\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\n}}}}}}}"}`
+	InvalidRouterQuery            = "query {allRouters(name:\"not-a-router\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\n}}}}}}}"
+	InvalidFieldExpectedRequest   = `{"query":"query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ninvalid-field\n}}}}}}}"}`
+	InvalidFieldQuery             = "query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ninvalid-field\n}}}}}}}"
 )
 
 var ResponseProcessingTestCases = []struct {
@@ -45,23 +46,14 @@ var ResponseProcessingTestCases = []struct {
 	ExpectedErrors  []string
 }{
 	{
-		Name:       "empty query produces error",
-		EntryPoint: "",
-		Fields:     nil,
-		Tags:       nil,
-		Query:      "query MyQuery{{\n}}",
-		Endpoint: Endpoint{"/api/v1/graphql", 400, `{"query":"query MyQuery{{\n}}"}`, `
-		{
-			"errors": [{
-				"name": "BadRequestError",
-				"message": "Must provide query string."
-			}]
-		}
-		`},
+		Name:            "empty query produces no request or metrics",
+		EntryPoint:      "",
+		Fields:          nil,
+		Tags:            nil,
+		Query:           "",
+		Endpoint:        Endpoint{},
 		ExpectedMetrics: nil,
-		ExpectedErrors: []string{
-			"status code 400 not OK for metric test-metric: Must provide query string.",
-		},
+		ExpectedErrors:  nil,
 	},
 	{
 		Name:            "empty response produces error",
@@ -69,10 +61,10 @@ var ResponseProcessingTestCases = []struct {
 		Fields:          map[string]string{"test-field": "test-field"},
 		Tags:            map[string]string{},
 		Query:           ValidQueryNoTag,
-		Endpoint:        Endpoint{"/api/v1/graphql", 200, ValidExpectedRequestNoTag, "{}"},
+		Endpoint:        Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestNoTag, "{}"},
 		ExpectedMetrics: nil,
 		ExpectedErrors: []string{
-			"unexpected response for metric test-metric: {}",
+			"unexpected response for collector test-collector: {}",
 		},
 	},
 	{
@@ -81,7 +73,7 @@ var ResponseProcessingTestCases = []struct {
 		Fields:     map[string]string{"test-field": "test-field"},
 		Tags:       map[string]string{},
 		Query:      ValidQueryNoTag,
-		Endpoint: Endpoint{"/api/v1/graphql", 200, ValidExpectedRequestNoTag, `{
+		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestNoTag, `{
 			"data": {
 				"allRouters": {
 				  	"nodes": [{
@@ -100,7 +92,7 @@ var ResponseProcessingTestCases = []struct {
 		}`},
 		ExpectedMetrics: nil,
 		ExpectedErrors: []string{
-			"found empty data for metric test-metric: field test-field",
+			"found empty data for collector test-collector: field test-field",
 		},
 	},
 	{
@@ -109,7 +101,7 @@ var ResponseProcessingTestCases = []struct {
 		Fields:     map[string]string{"test-field": "test-field"},
 		Tags:       map[string]string{"test-tag": "test-tag"},
 		Query:      ValidQuerySingleTag,
-		Endpoint: Endpoint{"/api/v1/graphql", 200, ValidExpectedRequestSingleTag, `{
+		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestSingleTag, `{
 			"data": {
 				"allRouters": {
 				  	"nodes": [{
@@ -129,9 +121,42 @@ var ResponseProcessingTestCases = []struct {
 		}`},
 		ExpectedMetrics: []*testutil.Metric{
 			{
-				Measurement: "test-metric",
+				Measurement: "test-collector",
 				Tags:        map[string]string{"test-tag": "128"},
 				Fields:      map[string]interface{}{"test-field": 128.0},
+			},
+		},
+		ExpectedErrors: nil,
+	},
+	{
+		Name:       "uses multiple fields",
+		EntryPoint: "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
+		Fields:     map[string]string{"test-field-1": "test-field-1", "test-field-2": "test-field-2"},
+		Tags:       map[string]string{},
+		Query:      ValidQueryDoubleTag,
+		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestDoubleTag, `{
+			"data": {
+				"allRouters": {
+				  	"nodes": [{
+					  	"nodes": {
+							"nodes": [{
+								"arp": {
+							  		"nodes": [{
+								  		"test-field-1": 128,
+										"test-field-2": 95
+									}]
+								}
+						  	}]
+					  	}
+					}]
+				}
+			}
+		}`},
+		ExpectedMetrics: []*testutil.Metric{
+			{
+				Measurement: "test-collector",
+				Tags:        map[string]string{},
+				Fields:      map[string]interface{}{"test-field-1": 128.0, "test-field-2": 95.0},
 			},
 		},
 		ExpectedErrors: nil,
@@ -142,7 +167,7 @@ var ResponseProcessingTestCases = []struct {
 		Fields:     map[string]string{"test-field": "test-field"},
 		Tags:       map[string]string{"test-tag-1": "test-tag-1", "test-tag-2": "test-tag-2"},
 		Query:      ValidQueryDoubleTag,
-		Endpoint: Endpoint{"/api/v1/graphql", 200, ValidExpectedRequestDoubleTag, `{
+		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestDoubleTag, `{
 			"data": {
 				"allRouters": {
 				  	"nodes": [{
@@ -163,7 +188,7 @@ var ResponseProcessingTestCases = []struct {
 		}`},
 		ExpectedMetrics: []*testutil.Metric{
 			{
-				Measurement: "test-metric",
+				Measurement: "test-collector",
 				Tags:        map[string]string{"test-tag-1": "test-string-1", "test-tag-2": "test-string-2"},
 				Fields:      map[string]interface{}{"test-field": 128.0},
 			},
@@ -176,7 +201,7 @@ var ResponseProcessingTestCases = []struct {
 		Fields:     map[string]string{"test-field": "test-field"},
 		Tags:       map[string]string{"test-tag-1": "test-tag-1", "test-tag-2": "test-tag-2"},
 		Query:      ValidQueryDoubleTag,
-		Endpoint: Endpoint{"/api/v1/graphql", 200, ValidExpectedRequestDoubleTag, `{
+		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestDoubleTag, `{
 			"data": {
 				"allRouters": {
 				  	"nodes": [{
@@ -197,8 +222,8 @@ var ResponseProcessingTestCases = []struct {
 		}`},
 		ExpectedMetrics: []*testutil.Metric{
 			{
-				Measurement: "test-metric",
-				Tags:        map[string]string{"test-tag-1": "test-string-1", "test-tag-2": "test-tag-2"},
+				Measurement: "test-collector",
+				Tags:        map[string]string{"test-tag-1": "test-string-1", "test-tag-2": ""},
 				Fields:      map[string]interface{}{"test-field": 128.0},
 			},
 		},
@@ -210,7 +235,7 @@ var ResponseProcessingTestCases = []struct {
 		Fields:     map[string]string{"test-field-renamed": "test-field"},
 		Tags:       map[string]string{"test-tag-renamed": "test-tag"},
 		Query:      ValidQuerySingleTag,
-		Endpoint: Endpoint{"/api/v1/graphql", 200, ValidExpectedRequestSingleTag, `{
+		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestSingleTag, `{
 			"data": {
 				"allRouters": {
 				  	"nodes": [{
@@ -230,7 +255,7 @@ var ResponseProcessingTestCases = []struct {
 		}`},
 		ExpectedMetrics: []*testutil.Metric{
 			{
-				Measurement: "test-metric",
+				Measurement: "test-collector",
 				Tags:        map[string]string{"test-tag-renamed": "test-string"},
 				Fields:      map[string]interface{}{"test-field-renamed": 128.0},
 			},
@@ -243,7 +268,7 @@ var ResponseProcessingTestCases = []struct {
 		Fields:     map[string]string{"test-field": "test-field"},
 		Tags:       map[string]string{"test-tag": "test-tag"},
 		Query:      ValidQuerySingleTag,
-		Endpoint: Endpoint{"/api/v1/graphql", 200, ValidExpectedRequestSingleTag, `{
+		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestSingleTag, `{
 			"data": {
 				"allRouters": {
 				  	"nodes": [{
@@ -267,12 +292,12 @@ var ResponseProcessingTestCases = []struct {
 		}`},
 		ExpectedMetrics: []*testutil.Metric{
 			{
-				Measurement: "test-metric",
+				Measurement: "test-collector",
 				Tags:        map[string]string{"test-tag": "test-string-1"},
 				Fields:      map[string]interface{}{"test-field": 128.0},
 			},
 			{
-				Measurement: "test-metric",
+				Measurement: "test-collector",
 				Tags:        map[string]string{"test-tag": "test-string-2"},
 				Fields:      map[string]interface{}{"test-field": 95.0},
 			},
@@ -285,10 +310,10 @@ var ResponseProcessingTestCases = []struct {
 		Fields:          map[string]string{"test-field": "test-field"},
 		Tags:            map[string]string{},
 		Query:           InvalidRouterQuery,
-		Endpoint:        Endpoint{"/api/v1/graphql", 404, InvalidRouterExpectedRequest, `it's not right`},
+		Endpoint:        Endpoint{"/api/v1/graphql/", 404, InvalidRouterExpectedRequest, `it's not right`},
 		ExpectedMetrics: nil,
 		ExpectedErrors: []string{
-			"status code 404 not OK for metric test-metric: it's not right",
+			"status code 404 not OK for collector test-collector: it's not right",
 		},
 	},
 	{
@@ -297,9 +322,9 @@ var ResponseProcessingTestCases = []struct {
 		Fields:          map[string]string{"test-field": "test-field"},
 		Tags:            map[string]string{},
 		Query:           ValidQueryNoTag,
-		Endpoint:        Endpoint{"/api/v1/graphql", 200, ValidExpectedRequestNoTag, `{"test": }`},
+		Endpoint:        Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestNoTag, `{"test": }`},
 		ExpectedMetrics: nil,
-		ExpectedErrors:  []string{"invalid json response for metric test-metric: invalid character '}' looking for beginning of value"},
+		ExpectedErrors:  []string{"invalid json response for collector test-collector: invalid character '}' looking for beginning of value"},
 	},
 	{
 		Name:       "propogates graphQL error to accumulator",
@@ -307,7 +332,7 @@ var ResponseProcessingTestCases = []struct {
 		Fields:     map[string]string{"invalid-field": "invalid-field"},
 		Tags:       map[string]string{},
 		Query:      InvalidFieldQuery,
-		Endpoint: Endpoint{"/api/v1/graphql", 200, InvalidFieldExpectedRequest, `
+		Endpoint: Endpoint{"/api/v1/graphql/", 200, InvalidFieldExpectedRequest, `
 		{
 			"errors": [{
 				"name": "GraphQLError",
@@ -319,7 +344,7 @@ var ResponseProcessingTestCases = []struct {
 			}]
 		  }`},
 		ExpectedMetrics: nil,
-		ExpectedErrors:  []string{"unexpected response for metric test-metric: Cannot query field \"invalid-field\" on type \"ArpEntryType\"."},
+		ExpectedErrors:  []string{"unexpected response for collector test-collector: Cannot query field \"invalid-field\" on type \"ArpEntryType\"."},
 	},
 }
 
@@ -360,15 +385,22 @@ func TestT128GraphqlResponseProcessing(t *testing.T) {
 			defer fakeServer.Close()
 
 			plugin := &plugin.T128GraphQL{
-				CollectorName: "test-metric",
-				BaseURL:       fakeServer.URL,
+				CollectorName: "test-collector",
+				BaseURL:       fakeServer.URL + "/api/v1/graphql",
 				EntryPoint:    testCase.EntryPoint,
 				Fields:        testCase.Fields,
 				Tags:          testCase.Tags,
 			}
 
 			var acc testutil.Accumulator
-			require.NoError(t, plugin.Init())
+
+			if plugin.EntryPoint == "" {
+				require.Error(t, plugin.Init())
+				return
+			} else {
+				require.NoError(t, plugin.Init())
+			}
+
 			plugin.Query = testCase.Query
 			plugin.Gather(&acc)
 
@@ -398,7 +430,7 @@ func TestT128GraphqlQueryFormation(t *testing.T) {
 	for _, testCase := range QueryFormationTestCases {
 		t.Run(testCase.Name, func(t *testing.T) {
 			plugin := &plugin.T128GraphQL{
-				CollectorName: "test-metric",
+				CollectorName: "test-collector",
 				BaseURL:       "/api/v1/graphql",
 				EntryPoint:    testCase.EntryPoint,
 				Fields:        testCase.Fields,
@@ -409,6 +441,42 @@ func TestT128GraphqlQueryFormation(t *testing.T) {
 			require.Equal(t, testCase.ExpectedQuery, plugin.Query)
 		})
 	}
+}
+
+func TestTimoutUsedForRequests(t *testing.T) {
+	done := make(chan struct{}, 1)
+
+	fakeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+		}
+
+		w.Write([]byte("[]"))
+	}))
+
+	plugin := &plugin.T128GraphQL{
+		CollectorName: "test-collector",
+		BaseURL:       fakeServer.URL + "/api/v1/graphql",
+		EntryPoint:    "fake/entry/point",
+		Fields:        map[string]string{"test-field": "test-field"},
+		Tags:          map[string]string{},
+		Timeout:       internal.Duration{Duration: 1 * time.Millisecond},
+	}
+
+	var acc testutil.Accumulator
+	require.NoError(t, plugin.Init())
+
+	require.NoError(t, plugin.Gather(&acc))
+	done <- struct{}{}
+
+	require.Len(t, acc.Errors, 1)
+	require.EqualError(
+		t,
+		acc.Errors[0],
+		fmt.Sprintf("failed to make graphQL request for collector test-collector: Post \"%s/api/v1/graphql/\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)", fakeServer.URL))
+
+	fakeServer.Close()
 }
 
 func createTestServer(t *testing.T, endpoint Endpoint) *httptest.Server {
