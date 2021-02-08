@@ -80,7 +80,7 @@ func (plugin *T128GraphQL) Init() error {
 		}
 	}
 
-	plugin.Query = plugin.buildQuery()
+	plugin.Query = buildQuery(plugin.EntryPoint, plugin.Fields, plugin.Tags)
 	plugin.JSONEntryPoint = plugin.buildJSONPathFromEntryPoint()
 	plugin.client = &http.Client{Transport: transport, Timeout: plugin.Timeout.Duration}
 
@@ -94,23 +94,6 @@ func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 	plugin.retrieveMetrics(acc, timestamp)
 
 	return nil
-}
-
-func (plugin *T128GraphQL) buildQuery() string {
-	var replacer = strings.NewReplacer("[", "(", "]", "\")", "/", "{", ":", ":\"")
-	query := "query {" + replacer.Replace(plugin.EntryPoint) + "{"
-
-	for _, element := range plugin.Fields {
-		query += "\n" + element
-	}
-	query = strings.TrimSpace(query)
-	for _, element := range plugin.Tags {
-		query += "\n" + element
-	}
-
-	query += "\n" + strings.Repeat("}", strings.Count(query, "{"))
-
-	return query
 }
 
 func (plugin *T128GraphQL) retrieveMetrics(acc telegraf.Accumulator, timestamp time.Time) {
@@ -163,6 +146,10 @@ func (plugin *T128GraphQL) retrieveMetrics(acc telegraf.Accumulator, timestamp t
 		return
 	}
 
+	plugin.processResponse(jsonChildren, acc, timestamp)
+}
+
+func (plugin *T128GraphQL) processResponse(jsonChildren []*gabs.Container, acc telegraf.Accumulator, timestamp time.Time) {
 	//TODO: allow nested fields/tags - MON-310
 	for _, child := range jsonChildren {
 		node := child.Data().(map[string]interface{})
