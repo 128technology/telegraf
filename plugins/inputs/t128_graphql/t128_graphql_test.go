@@ -35,6 +35,7 @@ const (
 	InvalidFieldQuery             = "query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ninvalid-field\n}}}}}}}"
 )
 
+//TODO: more unit tests - MON-314
 var ResponseProcessingTestCases = []struct {
 	Name            string
 	EntryPoint      string
@@ -378,6 +379,23 @@ var QueryFormationTestCases = []struct {
 	},
 }
 
+//TODO: more unit tests - MON-314
+var JSONPathFormationTestCases = []struct {
+	Name                   string
+	EntryPoint             string
+	Fields                 map[string]string
+	Tags                   map[string]string
+	ExpectedJSONEntryPoint string
+}{
+	{
+		Name:                   "build arp state json path",
+		EntryPoint:             "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
+		Fields:                 map[string]string{"test-field": "test-field"},
+		Tags:                   map[string]string{},
+		ExpectedJSONEntryPoint: "/data/allRouters/nodes/0/nodes/nodes/0/arp/nodes",
+	},
+}
+
 func TestT128GraphqlResponseProcessing(t *testing.T) {
 	for _, testCase := range ResponseProcessingTestCases {
 		t.Run(testCase.Name, func(t *testing.T) {
@@ -439,6 +457,23 @@ func TestT128GraphqlQueryFormation(t *testing.T) {
 
 			require.NoError(t, plugin.Init())
 			require.Equal(t, testCase.ExpectedQuery, plugin.Query)
+		})
+	}
+}
+
+func TestT128GraphqlJSONPathFormation(t *testing.T) {
+	for _, testCase := range JSONPathFormationTestCases {
+		t.Run(testCase.Name, func(t *testing.T) {
+			plugin := &plugin.T128GraphQL{
+				CollectorName: "test-collector",
+				BaseURL:       "/api/v1/graphql",
+				EntryPoint:    testCase.EntryPoint,
+				Fields:        testCase.Fields,
+				Tags:          testCase.Tags,
+			}
+
+			require.NoError(t, plugin.Init())
+			require.Equal(t, testCase.ExpectedJSONEntryPoint, plugin.JSONEntryPoint)
 		})
 	}
 }
