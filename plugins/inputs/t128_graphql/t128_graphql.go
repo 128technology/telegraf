@@ -2,70 +2,53 @@ package t128_graphql
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net"
 	"net/http"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Jeffail/gabs"
 	"github.com/influxdata/telegraf"
+	"github.com/influxdata/telegraf/internal"
 	"github.com/influxdata/telegraf/plugins/inputs"
 )
 
 const (
-	//make this configurable?
+	// DefaultRequestTimeout is the request timeout if none is configured
 	DefaultRequestTimeout = time.Second * 5
 )
 
+// T128GraphQL is an input for metrics of a 128T router instance
 type T128GraphQL struct {
 	CollectorName string            `toml:"collector_name"`
 	BaseURL       string            `toml:"base_url"`
+	UnixSocket    string            `toml:"unix_socket"`
 	EntryPoint    string            `toml:"entry_point"`
 	Fields        map[string]string `toml:"extract_fields"`
 	Tags          map[string]string `toml:"extract_tags"`
+	Timeout       internal.Duration `toml:"timeout"`
 
-	Client *http.Client
-	Query  string
+	Query          string
+	JSONEntryPoint string
+	client         *http.Client
 }
 
-var sampleConfig = `
-## Collect data using graphQL
-[[inputs.t128_graphql]]
-## Required. The telegraf collector name
-# collector_name = "arp-state"
-
-## Required. GraphQL ports vary across 128T versions
-# base_url = "http://localhost:31517"
-
-## The starting point in the graphQL tree for all configured tags and fields
-# entry_point = "allRouters[name:RTR_WEST_COMBO]/nodes/nodes[name:combo-west]/nodes/arp/nodes"
-
-## The fields to collect with the desired name as the key (left) and graphQL 
-## key as the value (right)
-# [inputs.t128_graphql.extract_fields]
-#   state = "state"
-
-## The tags for filtering data with the desired name as the key (left) and 
-## graphQL key as the value (right)
-# [inputs.t128_graphql.extract_tags]
-#   networkInterface = "networkInterface"
-#   deviceInterface = "deviceInterface"
-#   vlan = "vlan"
-#   ipAddress = "ipAddress"
-#   destinationMac = "destinationMac"
-`
-
+// SampleConfig returns the default configuration of the Input
 func (*T128GraphQL) SampleConfig() string {
 	return sampleConfig
 }
 
+// Description returns a one-sentence description on the Input
 func (*T128GraphQL) Description() string {
-	return "Read data from a graphQL query"
+	return "Make a 128T GraphQL query and return the data"
 }
 
+// Init sets up the input to be ready for action
 func (plugin *T128GraphQL) Init() error {
 	if plugin.CollectorName == "" {
 		return fmt.Errorf("collector_name is a required configuration field")
@@ -75,20 +58,38 @@ func (plugin *T128GraphQL) Init() error {
 		return fmt.Errorf("base_url is a required configuration field")
 	}
 
-	if plugin.BaseURL[len(plugin.BaseURL)-1:] != "/" {
+	if !strings.HasSuffix(plugin.BaseURL, "/") {
 		plugin.BaseURL += "/"
+	}
+
+	if plugin.EntryPoint == "" {
+		return fmt.Errorf("entry_point is a required configuration field")
+	}
+
+	if plugin.Fields == nil {
+		return fmt.Errorf("extract_fields is a required configuration field")
 	}
 
 	transport := http.DefaultTransport
 
-	plugin.Client = &http.Client{Transport: transport, Timeout: DefaultRequestTimeout}
+	if plugin.UnixSocket != "" {
+		transport = &http.Transport{
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+				return net.Dial("unix", plugin.UnixSocket)
+			},
+		}
+	}
+
 	plugin.Query = plugin.buildQuery()
+	plugin.JSONEntryPoint = plugin.buildJSONPathFromEntryPoint()
+	plugin.client = &http.Client{Transport: transport, Timeout: plugin.Timeout.Duration}
 
 	return nil
 }
 
+// Gather takes in an accumulator and adds the metrics that the Input gathers
 func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
-	timestamp := time.Now().Round(time.Second)
+	timestamp := time.Now()
 
 	plugin.retrieveMetrics(acc, timestamp)
 
@@ -96,9 +97,8 @@ func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 }
 
 func (plugin *T128GraphQL) buildQuery() string {
-	//allow multiple inputs like names[ComboEast,ComboWest] ?
 	var replacer = strings.NewReplacer("[", "(", "]", "\")", "/", "{", ":", ":\"")
-	query := "query MyQuery{" + replacer.Replace(plugin.EntryPoint) + "{"
+	query := "query {" + replacer.Replace(plugin.EntryPoint) + "{"
 
 	for _, element := range plugin.Fields {
 		query += "\n" + element
@@ -120,81 +120,77 @@ func (plugin *T128GraphQL) retrieveMetrics(acc telegraf.Accumulator, timestamp t
 		return
 	}
 
-	response, err := plugin.Client.Do(request)
-	buf := new(bytes.Buffer)
-	buf.ReadFrom(response.Body)
-
+	response, err := plugin.client.Do(request)
 	if err != nil {
-		template := "query error for metric %s: %s"
-		plugin.DecodeAndReportJsonErrors(buf.Bytes(), acc, template)
+		acc.AddError(fmt.Errorf("failed to make graphQL request for collector %s: %w", plugin.CollectorName, err))
 		return
 	}
 	defer response.Body.Close()
 
+	message, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		message = []byte("")
+	}
+
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		template := fmt.Sprintf("status code %d not OK for metric ", response.StatusCode) + "%s: %s"
-		plugin.DecodeAndReportJsonErrors(buf.Bytes(), acc, template)
+		template := fmt.Sprintf("status code %d not OK for collector ", response.StatusCode) + plugin.CollectorName + ": %s"
+		for _, err := range decodeAndReportJSONErrors(message, template) {
+			acc.AddError(err)
+		}
 		return
 	}
 
 	//decode json
-	jsonParsed, err := gabs.ParseJSON(buf.Bytes())
+	jsonParsed, err := gabs.ParseJSON(message)
 	if err != nil {
-		acc.AddError(fmt.Errorf("invalid json response for metric %s: %w", plugin.CollectorName, err))
+		acc.AddError(fmt.Errorf("invalid json response for collector %s: %w", plugin.CollectorName, err))
 		return
 	}
 
-	jsonEntryPoint := plugin.BuildJsonEntryPoint()
-	jsonObj, err := jsonParsed.JSONPointer(jsonEntryPoint)
+	jsonObj, err := jsonParsed.JSONPointer(plugin.JSONEntryPoint)
 	if err != nil {
-		template := "unexpected response for metric %s: %s"
-		plugin.DecodeAndReportJsonErrors(buf.Bytes(), acc, template)
+		template := "unexpected response for collector " + plugin.CollectorName + ": %s"
+		for _, err := range decodeAndReportJSONErrors(message, template) {
+			acc.AddError(err)
+		}
 		return
 	}
 
 	//update acc
 	jsonChildren, err := jsonObj.Children()
 	if err != nil {
-		acc.AddError(fmt.Errorf("failed to iterate on response nodes for metric %s: %w", plugin.CollectorName, err))
+		acc.AddError(fmt.Errorf("failed to iterate on response nodes for collector %s: %w", plugin.CollectorName, err))
 		return
 	}
 
-	//TODO: allow nested fields/tags
+	//TODO: allow nested fields/tags - MON-310
 	for _, child := range jsonChildren {
 		node := child.Data().(map[string]interface{})
 		fields := make(map[string]interface{})
 		tags := make(map[string]string)
 
-		//allow integer conversion?
-		//TODO: fully implement multiple fields
 		for fieldRenamed, fieldName := range plugin.Fields {
 			if isNil(node[fieldName]) {
-				acc.AddError(fmt.Errorf("found empty data for metric %s: field %s", plugin.CollectorName, fieldName))
+				acc.AddError(fmt.Errorf("found empty data for collector %s: field %s", plugin.CollectorName, fieldName))
 				continue
 			}
 			fields[fieldRenamed] = node[fieldName]
-
-			for tagRenamed, tagName := range plugin.Tags {
-				if isNil(node[tagName]) {
-					tags[tagRenamed] = tagRenamed
-					continue
-				}
-				//gabs module converts data to either string or float64
-				strTag, ok := node[tagName].(string)
-				if !ok {
-					floatTag := node[tagName].(float64)
-					strTag = strconv.FormatFloat(floatTag, 'f', -1, 64)
-				}
-				tags[tagRenamed] = strTag
-			}
-
-			acc.AddFields(
-				plugin.CollectorName,
-				fields,
-				tags,
-				timestamp,
-			)
 		}
+
+		for tagRenamed, tagName := range plugin.Tags {
+			if isNil(node[tagName]) {
+				tags[tagRenamed] = ""
+				continue
+			}
+			tags[tagRenamed] = fmt.Sprintf("%v", node[tagName])
+		}
+
+		acc.AddFields(
+			plugin.CollectorName,
+			fields,
+			tags,
+			timestamp,
+		)
 	}
 }
 
@@ -211,8 +207,7 @@ func (plugin *T128GraphQL) createRequest() (*http.Request, error) {
 		return nil, fmt.Errorf("failed to create request body for query '%s': %w", plugin.Query, err)
 	}
 
-	url := plugin.BaseURL + "api/v1/graphql"
-	request, err := http.NewRequest("POST", url, bytes.NewReader(body))
+	request, err := http.NewRequest("POST", plugin.BaseURL, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request for query '%s': %w", plugin.Query, err)
 	}
@@ -222,7 +217,7 @@ func (plugin *T128GraphQL) createRequest() (*http.Request, error) {
 	return request, nil
 }
 
-func (plugin *T128GraphQL) BuildJsonEntryPoint() string {
+func (plugin *T128GraphQL) buildJSONPathFromEntryPoint() string {
 	path := "/data/"
 	pathElements := strings.Split(plugin.EntryPoint, "/")
 	for idx, element := range pathElements {
@@ -241,29 +236,32 @@ func (plugin *T128GraphQL) BuildJsonEntryPoint() string {
 	return path
 }
 
-func (plugin *T128GraphQL) DecodeAndReportJsonErrors(response []byte, acc telegraf.Accumulator, template string) {
+func decodeAndReportJSONErrors(response []byte, template string) []error {
+	var errors []error
+
 	parsedJSON, err := gabs.ParseJSON(response)
 	if err != nil {
-		acc.AddError(fmt.Errorf(template, plugin.CollectorName, response))
-		return
+		errors = append(errors, fmt.Errorf(template, response))
+		return errors
 	}
 
 	jsonObj, err := parsedJSON.JSONPointer("/errors")
 	if err != nil {
-		acc.AddError(fmt.Errorf(template, plugin.CollectorName, parsedJSON.String()))
-		return
+		errors = append(errors, fmt.Errorf(template, parsedJSON.String()))
+		return errors
 	}
 
 	jsonChildren, err := jsonObj.Children()
 	if err != nil {
-		acc.AddError(fmt.Errorf(template, plugin.CollectorName, parsedJSON.String()))
-		return
+		errors = append(errors, fmt.Errorf(template, parsedJSON.String()))
+		return errors
 	}
 
 	for _, child := range jsonChildren {
 		errorNode := child.Data().(map[string]interface{})
-		acc.AddError(fmt.Errorf(template, plugin.CollectorName, errorNode["message"].(string)))
+		errors = append(errors, fmt.Errorf(template, errorNode["message"].(string)))
 	}
+	return errors
 }
 
 func isNil(i interface{}) bool {
@@ -279,6 +277,8 @@ func isNil(i interface{}) bool {
 
 func init() {
 	inputs.Add("t128_graphql", func() telegraf.Input {
-		return &T128GraphQL{}
+		return &T128GraphQL{
+			Timeout: internal.Duration{Duration: DefaultRequestTimeout},
+		}
 	})
 }
