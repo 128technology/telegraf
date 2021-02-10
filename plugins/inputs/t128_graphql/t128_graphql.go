@@ -35,6 +35,7 @@ type T128GraphQL struct {
 
 	Query          string
 	JSONEntryPoint string
+	requestBody    []byte
 	client         *http.Client
 }
 
@@ -50,6 +51,46 @@ func (*T128GraphQL) Description() string {
 
 // Init sets up the input to be ready for action
 func (plugin *T128GraphQL) Init() error {
+
+	//check config
+	err := plugin.checkConfig()
+	if err != nil {
+		return err
+	}
+
+	//build query, json path to data and request body
+	plugin.Query = buildQuery(plugin.EntryPoint, plugin.Fields, plugin.Tags)
+	plugin.JSONEntryPoint = plugin.buildJSONPathFromEntryPoint()
+
+	content := struct {
+		Query string `json:"query,omitempty"`
+	}{
+		plugin.Query,
+	}
+
+	body, err := json.Marshal(content)
+	if err != nil {
+		return fmt.Errorf("failed to create request body for query '%s': %w", plugin.Query, err)
+	}
+	plugin.requestBody = body
+
+	//setup client
+	transport := http.DefaultTransport
+
+	if plugin.UnixSocket != "" {
+		transport = &http.Transport{
+			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
+				return net.Dial("unix", plugin.UnixSocket)
+			},
+		}
+	}
+
+	plugin.client = &http.Client{Transport: transport, Timeout: plugin.Timeout.Duration}
+
+	return nil
+}
+
+func (plugin *T128GraphQL) checkConfig() error {
 	if plugin.CollectorName == "" {
 		return fmt.Errorf("collector_name is a required configuration field")
 	}
@@ -70,43 +111,25 @@ func (plugin *T128GraphQL) Init() error {
 		return fmt.Errorf("extract_fields is a required configuration field")
 	}
 
-	transport := http.DefaultTransport
-
-	if plugin.UnixSocket != "" {
-		transport = &http.Transport{
-			DialContext: func(_ context.Context, _, _ string) (net.Conn, error) {
-				return net.Dial("unix", plugin.UnixSocket)
-			},
-		}
+	if plugin.Tags == nil {
+		return fmt.Errorf("extract_tags is a required configuration field")
 	}
-
-	plugin.Query = buildQuery(plugin.EntryPoint, plugin.Fields, plugin.Tags)
-	plugin.JSONEntryPoint = plugin.buildJSONPathFromEntryPoint()
-	plugin.client = &http.Client{Transport: transport, Timeout: plugin.Timeout.Duration}
 
 	return nil
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input gathers
 func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
-	timestamp := time.Now()
-
-	plugin.retrieveMetrics(acc, timestamp)
-
-	return nil
-}
-
-func (plugin *T128GraphQL) retrieveMetrics(acc telegraf.Accumulator, timestamp time.Time) {
 	request, err := plugin.createRequest()
 	if err != nil {
 		acc.AddError(fmt.Errorf("failed to create a request for query %s: %w", plugin.Query, err))
-		return
+		return nil
 	}
 
 	response, err := plugin.client.Do(request)
 	if err != nil {
 		acc.AddError(fmt.Errorf("failed to make graphQL request for collector %s: %w", plugin.CollectorName, err))
-		return
+		return nil
 	}
 	defer response.Body.Close()
 
@@ -120,14 +143,14 @@ func (plugin *T128GraphQL) retrieveMetrics(acc telegraf.Accumulator, timestamp t
 		for _, err := range decodeAndReportJSONErrors(message, template) {
 			acc.AddError(err)
 		}
-		return
+		return nil
 	}
 
 	//decode json
 	jsonParsed, err := gabs.ParseJSON(message)
 	if err != nil {
 		acc.AddError(fmt.Errorf("invalid json response for collector %s: %w", plugin.CollectorName, err))
-		return
+		return nil
 	}
 
 	jsonObj, err := jsonParsed.JSONPointer(plugin.JSONEntryPoint)
@@ -136,20 +159,21 @@ func (plugin *T128GraphQL) retrieveMetrics(acc telegraf.Accumulator, timestamp t
 		for _, err := range decodeAndReportJSONErrors(message, template) {
 			acc.AddError(err)
 		}
-		return
+		return nil
 	}
 
 	//update acc
 	jsonChildren, err := jsonObj.Children()
 	if err != nil {
 		acc.AddError(fmt.Errorf("failed to iterate on response nodes for collector %s: %w", plugin.CollectorName, err))
-		return
+		return nil
 	}
 
-	plugin.processResponse(jsonChildren, acc, timestamp)
+	plugin.processResponse(jsonChildren, acc)
+	return nil
 }
 
-func (plugin *T128GraphQL) processResponse(jsonChildren []*gabs.Container, acc telegraf.Accumulator, timestamp time.Time) {
+func (plugin *T128GraphQL) processResponse(jsonChildren []*gabs.Container, acc telegraf.Accumulator) {
 	//TODO: allow nested fields/tags - MON-310
 	for _, child := range jsonChildren {
 		node := child.Data().(map[string]interface{})
@@ -176,25 +200,12 @@ func (plugin *T128GraphQL) processResponse(jsonChildren []*gabs.Container, acc t
 			plugin.CollectorName,
 			fields,
 			tags,
-			timestamp,
 		)
 	}
 }
 
 func (plugin *T128GraphQL) createRequest() (*http.Request, error) {
-	content := struct {
-		Query string `json:"query,omitempty"`
-	}{
-		plugin.Query,
-	}
-
-	//inject env config?
-	body, err := json.Marshal(content)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request body for query '%s': %w", plugin.Query, err)
-	}
-
-	request, err := http.NewRequest("POST", plugin.BaseURL, bytes.NewReader(body))
+	request, err := http.NewRequest("POST", plugin.BaseURL, bytes.NewReader(plugin.requestBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request for query '%s': %w", plugin.Query, err)
 	}

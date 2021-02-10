@@ -23,16 +23,16 @@ type Endpoint struct {
 }
 
 const (
-	ValidExpectedRequestNoTag     = `{"query":"query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\n}}}}}}}"}`
-	ValidQueryNoTag               = "query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\n}}}}}}}"
-	ValidExpectedRequestSingleTag = `{"query":"query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag\n}}}}}}}"}`
-	ValidQuerySingleTag           = "query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag\n}}}}}}}"
-	ValidExpectedRequestDoubleTag = `{"query":"query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag-1\ntest-tag-2\n}}}}}}}"}`
-	ValidQueryDoubleTag           = "query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag-1\ntest-tag-2\n}}}}}}}"
-	InvalidRouterExpectedRequest  = `{"query":"query {allRouters(name:\"not-a-router\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\n}}}}}}}"}`
-	InvalidRouterQuery            = "query {allRouters(name:\"not-a-router\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\n}}}}}}}"
-	InvalidFieldExpectedRequest   = `{"query":"query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ninvalid-field\n}}}}}}}"}`
-	InvalidFieldQuery             = "query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ninvalid-field\n}}}}}}}"
+	ValidExpectedRequestSingleTag   = `{"query":"query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag\n}}}}}}}"}`
+	ValidQuerySingleTag             = "query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag\n}}}}}}}"
+	ValidExpectedRequestDoubleTag   = `{"query":"query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag-1\ntest-tag-2\n}}}}}}}"}`
+	ValidQueryDoubleTag             = "query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag-1\ntest-tag-2\n}}}}}}}"
+	ValidExpectedRequestDoubleField = `{"query":"query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field-1\ntest-field-2\ntest-tag\n}}}}}}}"}`
+	ValidQueryDoubleField           = "query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field-1\ntest-field-2\ntest-tag\n}}}}}}}"
+	InvalidRouterExpectedRequest    = `{"query":"query {allRouters(name:\"not-a-router\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag\n}}}}}}}"}`
+	InvalidRouterQuery              = "query {allRouters(name:\"not-a-router\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag\n}}}}}}}"
+	InvalidFieldExpectedRequest     = `{"query":"query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ninvalid-field\ntest-tag\n}}}}}}}"}`
+	InvalidFieldQuery               = "query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ninvalid-field\ntest-tag\n}}}}}}}"
 )
 
 //TODO: more unit tests - MON-314
@@ -60,9 +60,9 @@ var ResponseProcessingTestCases = []struct {
 		Name:            "empty response produces error",
 		EntryPoint:      "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
 		Fields:          map[string]string{"test-field": "test-field"},
-		Tags:            map[string]string{},
-		Query:           ValidQueryNoTag,
-		Endpoint:        Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestNoTag, "{}"},
+		Tags:            map[string]string{"test-tag": "test-tag"},
+		Query:           ValidQuerySingleTag,
+		Endpoint:        Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestSingleTag, "{}"},
 		ExpectedMetrics: nil,
 		ExpectedErrors: []string{
 			"unexpected response for collector test-collector: {}",
@@ -72,9 +72,9 @@ var ResponseProcessingTestCases = []struct {
 		Name:       "none value produces error",
 		EntryPoint: "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
 		Fields:     map[string]string{"test-field": "test-field"},
-		Tags:       map[string]string{},
-		Query:      ValidQueryNoTag,
-		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestNoTag, `{
+		Tags:       map[string]string{"test-tag": "test-tag"},
+		Query:      ValidQuerySingleTag,
+		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestSingleTag, `{
 			"data": {
 				"allRouters": {
 				  	"nodes": [{
@@ -82,7 +82,8 @@ var ResponseProcessingTestCases = []struct {
 							"nodes": [{
 								"arp": {
 							  		"nodes": [{
-								  		"test-field": null
+								  		"test-field": null,
+										"test-tag": "test-string"
 									}]
 								}
 						  	}]
@@ -133,9 +134,9 @@ var ResponseProcessingTestCases = []struct {
 		Name:       "uses multiple fields",
 		EntryPoint: "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
 		Fields:     map[string]string{"test-field-1": "test-field-1", "test-field-2": "test-field-2"},
-		Tags:       map[string]string{},
-		Query:      ValidQueryDoubleTag,
-		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestDoubleTag, `{
+		Tags:       map[string]string{"test-tag": "test-tag"},
+		Query:      ValidQueryDoubleField,
+		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestDoubleField, `{
 			"data": {
 				"allRouters": {
 				  	"nodes": [{
@@ -144,7 +145,8 @@ var ResponseProcessingTestCases = []struct {
 								"arp": {
 							  		"nodes": [{
 								  		"test-field-1": 128,
-										"test-field-2": 95
+										"test-field-2": 95,
+										"test-tag": "test-string"
 									}]
 								}
 						  	}]
@@ -156,7 +158,7 @@ var ResponseProcessingTestCases = []struct {
 		ExpectedMetrics: []*testutil.Metric{
 			{
 				Measurement: "test-collector",
-				Tags:        map[string]string{},
+				Tags:        map[string]string{"test-tag": "test-string"},
 				Fields:      map[string]interface{}{"test-field-1": 128.0, "test-field-2": 95.0},
 			},
 		},
@@ -309,7 +311,7 @@ var ResponseProcessingTestCases = []struct {
 		Name:            "propogates not found error to accumulator",
 		EntryPoint:      "allRouters[name:not-a-router]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
 		Fields:          map[string]string{"test-field": "test-field"},
-		Tags:            map[string]string{},
+		Tags:            map[string]string{"test-tag": "test-tag"},
 		Query:           InvalidRouterQuery,
 		Endpoint:        Endpoint{"/api/v1/graphql/", 404, InvalidRouterExpectedRequest, `it's not right`},
 		ExpectedMetrics: nil,
@@ -321,9 +323,9 @@ var ResponseProcessingTestCases = []struct {
 		Name:            "propogates invalid json error to accumulator",
 		EntryPoint:      "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
 		Fields:          map[string]string{"test-field": "test-field"},
-		Tags:            map[string]string{},
-		Query:           ValidQueryNoTag,
-		Endpoint:        Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestNoTag, `{"test": }`},
+		Tags:            map[string]string{"test-tag": "test-tag"},
+		Query:           ValidQuerySingleTag,
+		Endpoint:        Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestSingleTag, `{"test": }`},
 		ExpectedMetrics: nil,
 		ExpectedErrors:  []string{"invalid json response for collector test-collector: invalid character '}' looking for beginning of value"},
 	},
@@ -331,7 +333,7 @@ var ResponseProcessingTestCases = []struct {
 		Name:       "propogates graphQL error to accumulator",
 		EntryPoint: "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
 		Fields:     map[string]string{"invalid-field": "invalid-field"},
-		Tags:       map[string]string{},
+		Tags:       map[string]string{"test-tag": "test-tag"},
 		Query:      InvalidFieldQuery,
 		Endpoint: Endpoint{"/api/v1/graphql/", 200, InvalidFieldExpectedRequest, `
 		{
@@ -356,13 +358,6 @@ var QueryFormationTestCases = []struct {
 	Tags          map[string]string
 	ExpectedQuery string
 }{
-	{
-		Name:          "convert simple query no tag",
-		EntryPoint:    "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
-		Fields:        map[string]string{"test-field": "test-field"},
-		Tags:          map[string]string{},
-		ExpectedQuery: ValidQueryNoTag,
-	},
 	{
 		Name:          "convert simple query single tag",
 		EntryPoint:    "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
