@@ -68,6 +68,11 @@ var sampleConfig = `
   # [outputs.http.headers]
   #   # Should be set manually to "application/json" for json data_format
   #   Content-Type = "text/plain; charset=utf-8"
+
+  ## Idle (keep-alive) connection timeout.
+  ## Maximum amount of time before idle connection is closed.
+  ## Zero means no limit.
+  # idle_conn_timeout = 0
 `
 
 const (
@@ -89,6 +94,7 @@ type HTTP struct {
 	TokenURL        string            `toml:"token_url"`
 	Scopes          []string          `toml:"scopes"`
 	ContentEncoding string            `toml:"content_encoding"`
+	IdleConnTimeout internal.Duration `toml:"idle_conn_timeout"`
 	tls.ClientConfig
 
 	client     *http.Client
@@ -108,6 +114,7 @@ func (h *HTTP) createClient(ctx context.Context) (*http.Client, error) {
 	transport := &http.Transport{
 		TLSClientConfig: tlsCfg,
 		Proxy:           http.ProxyFromEnvironment,
+		IdleConnTimeout: h.IdleConnTimeout.Duration,
 	}
 
 	if len(h.UnixSocket) > 0 {
