@@ -23,16 +23,18 @@ type Endpoint struct {
 }
 
 const (
-	ValidExpectedRequestSingleTag   = `{"query":"query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag\n}}}}}}}"}`
-	ValidQuerySingleTag             = "query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag\n}}}}}}}"
-	ValidExpectedRequestDoubleTag   = `{"query":"query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag-1\ntest-tag-2\n}}}}}}}"}`
-	ValidQueryDoubleTag             = "query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag-1\ntest-tag-2\n}}}}}}}"
-	ValidExpectedRequestDoubleField = `{"query":"query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field-1\ntest-field-2\ntest-tag\n}}}}}}}"}`
-	ValidQueryDoubleField           = "query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field-1\ntest-field-2\ntest-tag\n}}}}}}}"
-	InvalidRouterExpectedRequest    = `{"query":"query {allRouters(name:\"not-a-router\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag\n}}}}}}}"}`
-	InvalidRouterQuery              = "query {allRouters(name:\"not-a-router\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ntest-field\ntest-tag\n}}}}}}}"
-	InvalidFieldExpectedRequest     = `{"query":"query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ninvalid-field\ntest-tag\n}}}}}}}"}`
-	InvalidFieldQuery               = "query {allRouters(name:\"ComboEast\"){nodes{nodes(name:\"east-combo\"){nodes{arp{nodes{\ninvalid-field\ntest-tag\n}}}}}}}"
+	ValidExpectedRequestSingleTag   = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}}}}}}"}`
+	ValidQuerySingleTag             = "query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}}}}}}"
+	ValidExpectedRequestDoubleTag   = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag-1\ntest-tag-2}}}}}}}"}`
+	ValidQueryDoubleTag             = "query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag-1\ntest-tag-2}}}}}}}"
+	ValidExpectedRequestDoubleField = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field-1\ntest-field-2\ntest-tag}}}}}}}"}`
+	ValidQueryDoubleField           = "query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field-1\ntest-field-2\ntest-tag}}}}}}}"
+	ValidExpectedRequestNestedTag   = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\nstate{\ntest-tag-2}\ntest-field\ntest-tag-1}}}}}}}"}`
+	ValidQueryNestedTag             = "query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\nstate{\ntest-tag-2}\ntest-field\ntest-tag-1}}}}}}}"
+	InvalidRouterExpectedRequest    = `{"query":"query {\nallRouters(name:\"not-a-router\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}}}}}}"}`
+	InvalidRouterQuery              = "query {\nallRouters(name:\"not-a-router\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}}}}}}"
+	InvalidFieldExpectedRequest     = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ninvalid-field\ntest-tag}}}}}}}"}`
+	InvalidFieldQuery               = "query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ninvalid-field\ntest-tag}}}}}}}"
 )
 
 //TODO: more unit tests - MON-314
@@ -308,6 +310,54 @@ var ResponseProcessingTestCases = []struct {
 		ExpectedErrors: nil,
 	},
 	{
+		Name:       "processes response with nested tags",
+		EntryPoint: "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
+		Fields:     map[string]string{"test-field": "test-field"},
+		Tags:       map[string]string{"test-tag-1": "test-tag-1", "test-tag-2": "state/test-tag-2"},
+		Query:      ValidQueryNestedTag,
+		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestNestedTag, `{
+			"data": {
+				"allRouters": {
+				  	"nodes": [{
+					  	"nodes": {
+							"nodes": [{
+								"arp": {
+							  		"nodes": [{
+								  		"test-field": 128,
+								  		"test-tag-1": "test-string-1",
+										"state": {
+											"test-tag-2": "test-string-2"
+										}
+									},
+									{
+										"test-field": 95,
+										"test-tag-1": "test-string-3",
+										"state": {
+											"test-tag-2": "test-string-4"
+										}
+								  	}]
+								}
+						  	}]
+					  	}
+					}]
+				}
+			}
+		}`},
+		ExpectedMetrics: []*testutil.Metric{
+			{
+				Measurement: "test-collector",
+				Tags:        map[string]string{"test-tag-1": "test-string-1", "test-tag-2": "test-string-2"},
+				Fields:      map[string]interface{}{"test-field": 128.0},
+			},
+			{
+				Measurement: "test-collector",
+				Tags:        map[string]string{"test-tag-1": "test-string-3", "test-tag-2": "test-string-4"},
+				Fields:      map[string]interface{}{"test-field": 95.0},
+			},
+		},
+		ExpectedErrors: nil,
+	},
+	{
 		Name:            "propogates not found error to accumulator",
 		EntryPoint:      "allRouters[name:not-a-router]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
 		Fields:          map[string]string{"test-field": "test-field"},
@@ -371,6 +421,13 @@ var QueryFormationTestCases = []struct {
 		Fields:        map[string]string{"test-field": "test-field"},
 		Tags:          map[string]string{"test-tag-1": "test-tag-1", "test-tag-2": "test-tag-2"},
 		ExpectedQuery: ValidQueryDoubleTag,
+	},
+	{
+		Name:          "convert query nested tag",
+		EntryPoint:    "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
+		Fields:        map[string]string{"test-field": "test-field"},
+		Tags:          map[string]string{"test-tag-1": "test-tag-1", "test-tag-2": "state/test-tag-2"},
+		ExpectedQuery: ValidQueryNestedTag,
 	},
 }
 
