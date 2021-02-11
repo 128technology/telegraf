@@ -60,7 +60,7 @@ func (plugin *T128GraphQL) Init() error {
 
 	//build query, json path to data and request body
 	plugin.Query = buildQuery(plugin.EntryPoint, plugin.Fields, plugin.Tags)
-	plugin.JSONEntryPoint = plugin.buildJSONPathFromEntryPoint()
+	plugin.JSONEntryPoint = buildJSONPathFromEntryPoint(plugin.EntryPoint)
 
 	content := struct {
 		Query string `json:"query,omitempty"`
@@ -174,26 +174,47 @@ func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 }
 
 func (plugin *T128GraphQL) processResponse(jsonChildren []*gabs.Container, acc telegraf.Accumulator) {
-	//TODO: allow nested fields/tags - MON-310
 	for _, child := range jsonChildren {
 		node := child.Data().(map[string]interface{})
 		fields := make(map[string]interface{})
 		tags := make(map[string]string)
 
 		for fieldRenamed, fieldName := range plugin.Fields {
-			if isNil(node[fieldName]) {
+			data := node[fieldName]
+
+			if strings.Contains(fieldName, "/") {
+				nestedObj, err := child.JSONPointer("/" + fieldName)
+				if err != nil {
+					acc.AddError(fmt.Errorf("unexpected response for collector %s: field %s", plugin.CollectorName, fieldName))
+					continue
+				}
+				data = nestedObj.Data()
+			}
+
+			if isNil(data) {
 				acc.AddError(fmt.Errorf("found empty data for collector %s: field %s", plugin.CollectorName, fieldName))
 				continue
 			}
-			fields[fieldRenamed] = node[fieldName]
+			fields[fieldRenamed] = data
 		}
 
 		for tagRenamed, tagName := range plugin.Tags {
-			if isNil(node[tagName]) {
+			data := node[tagName]
+
+			if strings.Contains(tagName, "/") {
+				nestedObj, err := child.JSONPointer("/" + tagName)
+				if err != nil {
+					acc.AddError(fmt.Errorf("unexpected response for collector %s: tag %s", plugin.CollectorName, tagName))
+					continue
+				}
+				data = nestedObj.Data()
+			}
+
+			if isNil(data) {
 				tags[tagRenamed] = ""
 				continue
 			}
-			tags[tagRenamed] = fmt.Sprintf("%v", node[tagName])
+			tags[tagRenamed] = fmt.Sprintf("%v", data)
 		}
 
 		acc.AddFields(
@@ -215,9 +236,9 @@ func (plugin *T128GraphQL) createRequest() (*http.Request, error) {
 	return request, nil
 }
 
-func (plugin *T128GraphQL) buildJSONPathFromEntryPoint() string {
+func buildJSONPathFromEntryPoint(entryPoint string) string {
 	path := "/data/"
-	pathElements := strings.Split(plugin.EntryPoint, "/")
+	pathElements := strings.Split(entryPoint, "/")
 	for idx, element := range pathElements {
 		bracketIdx := strings.Index(element, "[")
 		if bracketIdx > 0 {
