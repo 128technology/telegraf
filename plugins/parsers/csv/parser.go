@@ -35,8 +35,6 @@ type Config struct {
 
 	gotColumnNames bool
 
-	gotColumnNames bool
-
 	TimeFunc    func() time.Time
 	DefaultTags map[string]string
 }
