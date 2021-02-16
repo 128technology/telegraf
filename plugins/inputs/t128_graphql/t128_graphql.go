@@ -59,8 +59,8 @@ func (plugin *T128GraphQL) Init() error {
 	}
 
 	//build query, json path to data and request body
-	plugin.Query = buildQuery(plugin.EntryPoint, plugin.Fields, plugin.Tags)
-	plugin.JSONEntryPoint = buildJSONPathFromEntryPoint(plugin.EntryPoint)
+	plugin.Query = BuildQuery(plugin.EntryPoint, plugin.Fields, plugin.Tags)
+	plugin.JSONEntryPoint = ParseEntryPoint(plugin.EntryPoint).ResponsePath
 
 	content := struct {
 		Query string `json:"query,omitempty"`
@@ -153,6 +153,7 @@ func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 		return nil
 	}
 
+	//TODO: move all of this into ProcessResponse() - MON-315
 	jsonObj, err := jsonParsed.JSONPointer(plugin.JSONEntryPoint)
 	if err != nil {
 		template := "unexpected response for collector " + plugin.CollectorName + ": %s"
@@ -169,60 +170,20 @@ func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 		return nil
 	}
 
-	plugin.processResponse(jsonChildren, acc)
-	return nil
-}
+	processedResponses, err := ProcessResponse(jsonChildren, plugin.CollectorName, plugin.Fields, plugin.Tags)
+	if err != nil {
+		acc.AddError(err)
+		return nil
+	}
 
-func (plugin *T128GraphQL) processResponse(jsonChildren []*gabs.Container, acc telegraf.Accumulator) {
-	for _, child := range jsonChildren {
-		node := child.Data().(map[string]interface{})
-		fields := make(map[string]interface{})
-		tags := make(map[string]string)
-
-		for fieldRenamed, fieldName := range plugin.Fields {
-			data := node[fieldName]
-
-			if strings.Contains(fieldName, "/") {
-				nestedObj, err := child.JSONPointer("/" + fieldName)
-				if err != nil {
-					acc.AddError(fmt.Errorf("unexpected response for collector %s: field %s", plugin.CollectorName, fieldName))
-					continue
-				}
-				data = nestedObj.Data()
-			}
-
-			if isNil(data) {
-				acc.AddError(fmt.Errorf("found empty data for collector %s: field %s", plugin.CollectorName, fieldName))
-				continue
-			}
-			fields[fieldRenamed] = data
-		}
-
-		for tagRenamed, tagName := range plugin.Tags {
-			data := node[tagName]
-
-			if strings.Contains(tagName, "/") {
-				nestedObj, err := child.JSONPointer("/" + tagName)
-				if err != nil {
-					acc.AddError(fmt.Errorf("unexpected response for collector %s: tag %s", plugin.CollectorName, tagName))
-					continue
-				}
-				data = nestedObj.Data()
-			}
-
-			if isNil(data) {
-				tags[tagRenamed] = ""
-				continue
-			}
-			tags[tagRenamed] = fmt.Sprintf("%v", data)
-		}
-
+	for _, processedResponse := range processedResponses {
 		acc.AddFields(
 			plugin.CollectorName,
-			fields,
-			tags,
+			processedResponse.Fields,
+			processedResponse.Tags,
 		)
 	}
+	return nil
 }
 
 func (plugin *T128GraphQL) createRequest() (*http.Request, error) {
@@ -234,25 +195,6 @@ func (plugin *T128GraphQL) createRequest() (*http.Request, error) {
 	request.Header.Add("Content-Type", "application/json")
 
 	return request, nil
-}
-
-func buildJSONPathFromEntryPoint(entryPoint string) string {
-	path := "/data/"
-	pathElements := strings.Split(entryPoint, "/")
-	for idx, element := range pathElements {
-		bracketIdx := strings.Index(element, "[")
-		if bracketIdx > 0 {
-			path += element[:bracketIdx] + "/"
-		} else {
-			if idx < len(pathElements)-2 {
-				path += element + "/0/"
-			} else {
-				path += element + "/"
-			}
-		}
-	}
-	path = strings.TrimRight(path, "/")
-	return path
 }
 
 func decodeAndReportJSONErrors(response []byte, template string) []error {
