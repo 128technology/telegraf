@@ -13,17 +13,17 @@ var sampleConfig = `
 # unix_socket = "/var/run/128technology/web-server.sock"
 
 ## The starting point in the graphQL tree for all configured tags and fields
-# entry_point = "allRouters[name:RTR_WEST_COMBO]/nodes/nodes[name:combo-west]/nodes/arp/nodes"
+# entry_point = "allRouters[name:${ROUTER}]/nodes/nodes[name:${NODE}]/nodes/arp/nodes"
 
 ## Amount of time allowed to complete a single HTTP request
 # timeout = "5s"
 
-## The fields to collect with the desired name as the key (left) and graphQL 
+## Required. The fields to collect with the desired name as the key (left) and graphQL 
 ## key as the value (right)
 # [inputs.t128_graphql.extract_fields]
 #   state = "state"
 
-## The tags for filtering data with the desired name as the key (left) and 
+## Required. The tags for filtering data with the desired name as the key (left) and 
 ## graphQL key as the value (right)
 # [inputs.t128_graphql.extract_tags]
 #   network-interface = "networkInterface"
