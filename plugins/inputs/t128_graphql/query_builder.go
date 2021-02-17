@@ -92,21 +92,21 @@ func buildQueryObject(entryPoint string, fields map[string]string, tags map[stri
 
 func addToQueryObj(jsonObj *gabs.Container, items map[string]string, keyIsPath bool, usesSlash bool, basePath string) {
 	var replacer = strings.NewReplacer("/", ".")
-	for key, value := range items {
+	dictSwap := func(key string, value string) (string, string) {
 		if keyIsPath {
-			if usesSlash {
-				partialPath := replacer.Replace(key)
-				jsonObj.SetP(value, basePath+partialPath)
-			} else {
-				jsonObj.SetP(value, basePath+key)
-			}
+			return value, key
+		}
+		return key, value
+	}
+
+	for key, value := range items {
+		key, value = dictSwap(key, value)
+		//TODO: preprocess to remove usesSlash - MON-315
+		if usesSlash {
+			partialPath := replacer.Replace(value)
+			jsonObj.SetP(key, basePath+partialPath)
 		} else {
-			if usesSlash {
-				partialPath := replacer.Replace(value)
-				jsonObj.SetP(key, basePath+partialPath)
-			} else {
-				jsonObj.SetP(key, basePath+value)
-			}
+			jsonObj.SetP(key, basePath+value)
 		}
 	}
 }
@@ -130,33 +130,45 @@ func buildQueryBody(jsonObj *gabs.Container, w io.Writer) {
 
 	children := 0
 	for i, key := range keys {
+		//TODO: safely type-asert - MON-315
 		//add predicates like (name:"ComboEast") to the query
 		if strings.HasPrefix(key, predicateTag) {
-			w.Write(
-				[]byte("(" +
-					key[1:] + //key example - "$name"
-					":\"" +
-					jsonChildren[key].Data().(string) + //jsonChildren[key] example - "ComboEast"
-					"\"){")) //written output example - (name:"ComboEast")
+			writePredicate(w, fmt.Sprintf("(%s:\"%s\"){", key[1:], jsonChildren[key].Data().(string)))
 			continue
 		}
 		children++
 		_, ok := jsonChildren[key].Data().(string)
 		if !ok { //means jsonChildren[key] is not a leaf and we need to traverse further
 			if i == 0 {
-				w.Write([]byte("{"))
+				startSection(w)
 			}
-			w.Write([]byte("\n" + key))          //visit current node in pre-order traversal
+			writeElement(w, key)                 //visit current node in pre-order traversal
 			buildQueryBody(jsonChildren[key], w) //visit child nodes in pre-order traversal
 			continue
 		}
 		if i == 0 {
-			w.Write([]byte("{"))
+			startSection(w)
 		}
-		w.Write([]byte("\n" + key)) //visit a leaf node
+		writeElement(w, key) //visit a leaf node
 	}
 
 	if children > 0 {
-		w.Write([]byte("}"))
+		endSection(w)
 	}
+}
+
+func startSection(w io.Writer) {
+	w.Write([]byte("{"))
+}
+
+func endSection(w io.Writer) {
+	w.Write([]byte("}"))
+}
+
+func writePredicate(w io.Writer, pred string) {
+	w.Write([]byte(pred))
+}
+
+func writeElement(w io.Writer, elem string) {
+	w.Write([]byte("\n" + elem))
 }
