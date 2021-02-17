@@ -107,24 +107,6 @@ var ResponseProcessingTestCases = []struct {
 		ExpectedError: nil,
 	},
 	{
-		Name:   "converts tag to string if numeric",
-		Fields: map[string]string{"test-field": "test-field"},
-		Tags:   map[string]string{"test-tag": "test-tag"},
-		JsonInput: []*gabs.Container{
-			generateJsonTestData([]byte(`{
-				"test-field": 128,
-				"test-tag": 128
-			}`)),
-		},
-		ExpectedOutput: []*plugin.ProcessedResponse{
-			&plugin.ProcessedResponse{
-				Fields: map[string]interface{}{"test-field": 128.0},
-				Tags:   map[string]string{"test-tag": "128"},
-			},
-		},
-		ExpectedError: nil,
-	},
-	{
 		Name:   "renames tags and fields",
 		Fields: map[string]string{"test-field-renamed": "test-field"},
 		Tags:   map[string]string{"test-tag-renamed": "test-tag"},
@@ -210,6 +192,56 @@ var ResponseProcessingTestCases = []struct {
 				"test-tag-1": "test-string-1",
 			  	"state1": {
 					"state2": {
+						"state3": {
+							"test-tag-2": "test-string-2"
+						}
+					}
+			  	}
+		  	}`)),
+		},
+		ExpectedOutput: []*plugin.ProcessedResponse{
+			&plugin.ProcessedResponse{
+				Fields: map[string]interface{}{"test-field": 128.0},
+				Tags:   map[string]string{"test-tag-1": "test-string-1", "test-tag-2": "test-string-2"},
+			},
+		},
+		ExpectedError: nil,
+	},
+	{
+		Name:   "process response with multi-level nested fields",
+		Fields: map[string]string{"test-field-1": "state1/state2/state3/test-field-1", "test-field-2": "test-field-2"},
+		Tags:   map[string]string{"test-tag": "test-tag"},
+		JsonInput: []*gabs.Container{
+			generateJsonTestData([]byte(`{
+				"test-field-2": 128,
+				"test-tag": "test-string-1",
+			  	"state1": {
+					"state2": {
+						"state3": {
+							"test-field-1": 95
+						}
+					}
+			  	}
+		  	}`)),
+		},
+		ExpectedOutput: []*plugin.ProcessedResponse{
+			&plugin.ProcessedResponse{
+				Fields: map[string]interface{}{"test-field-1": 95.0, "test-field-2": 128.0},
+				Tags:   map[string]string{"test-tag": "test-string-1"},
+			},
+		},
+		ExpectedError: nil,
+	},
+	{
+		Name:   "process response with mixed nesting",
+		Fields: map[string]string{"test-field": "state1/state2/test-field"},
+		Tags:   map[string]string{"test-tag-1": "test-tag-1", "test-tag-2": "state1/state2/state3/test-tag-2"},
+		JsonInput: []*gabs.Container{
+			generateJsonTestData([]byte(`{
+				"test-tag-1": "test-string-1",
+			  	"state1": {
+					"state2": {
+						"test-field": 128,
 						"state3": {
 							"test-tag-2": "test-string-2"
 						}
