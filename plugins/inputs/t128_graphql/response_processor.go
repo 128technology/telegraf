@@ -19,7 +19,9 @@ func ProcessResponse(jsonChildren []*gabs.Container, collectorName string, field
 
 	//TODO: support queries needed by mist agent - MON-315
 	for _, child := range jsonChildren {
+		//TODO: safely type-asert if keeping - MON-315
 		node := child.Data().(map[string]interface{})
+		//TODO: move to init if keeping - MON-315
 		processedResponse := &ProcessedResponse{Fields: map[string]interface{}{}, Tags: map[string]string{}}
 
 		for fieldRenamed, fieldName := range fields {

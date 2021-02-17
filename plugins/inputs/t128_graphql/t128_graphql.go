@@ -219,6 +219,7 @@ func decodeAndReportJSONErrors(response []byte, template string) []error {
 	}
 
 	for _, child := range jsonChildren {
+		//TODO: safely type-asert - MON-315
 		errorNode := child.Data().(map[string]interface{})
 		errors = append(errors, fmt.Errorf(template, errorNode["message"].(string)))
 	}
