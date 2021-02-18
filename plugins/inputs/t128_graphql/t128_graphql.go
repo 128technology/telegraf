@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"reflect"
 	"strings"
 	"time"
 
@@ -24,7 +23,6 @@ const (
 )
 
 // T128GraphQL is an input for metrics of a 128T router instance
-//TODO: check public/private
 type T128GraphQL struct {
 	CollectorName string            `toml:"collector_name"`
 	BaseURL       string            `toml:"base_url"`
@@ -34,10 +32,9 @@ type T128GraphQL struct {
 	Tags          map[string]string `toml:"extract_tags"`
 	Timeout       internal.Duration `toml:"timeout"`
 
-	Query          string
-	JSONEntryPoint string
-	requestBody    []byte
-	client         *http.Client
+	Query       string
+	requestBody []byte
+	client      *http.Client
 }
 
 // SampleConfig returns the default configuration of the Input
@@ -61,7 +58,6 @@ func (plugin *T128GraphQL) Init() error {
 
 	//build query, json path to data and request body
 	plugin.Query = BuildQuery(plugin.EntryPoint, plugin.Fields, plugin.Tags)
-	plugin.JSONEntryPoint = ParseEntryPoint(plugin.EntryPoint).ResponsePath
 
 	content := struct {
 		Query string `json:"query,omitempty"`
@@ -154,24 +150,18 @@ func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 		return nil
 	}
 
-	//TODO: move all of this into ProcessResponse() - MON-315
-	jsonObj, err := jsonParsed.JSONPointer(plugin.JSONEntryPoint)
-	if err != nil {
-		template := "unexpected response for collector " + plugin.CollectorName + ": %s"
+	//look for other errors in response
+	exists := jsonParsed.Exists("errors")
+	if exists {
+		template := fmt.Sprintf("unexpected response for collector %s", plugin.CollectorName) + ": %s"
 		for _, err := range decodeAndReportJSONErrors(message, template) {
 			acc.AddError(err)
 		}
 		return nil
 	}
 
-	//update acc
-	jsonChildren, err := jsonObj.Children()
-	if err != nil {
-		acc.AddError(fmt.Errorf("failed to iterate on response nodes for collector %s: %w", plugin.CollectorName, err))
-		return nil
-	}
-
-	processedResponses, err := ProcessResponse(jsonChildren, plugin.CollectorName, plugin.Fields, plugin.Tags)
+	parsedInput := ParseEntryPoint(plugin.EntryPoint, plugin.Fields, plugin.Tags)
+	processedResponses, err := ProcessResponse(jsonParsed, parsedInput.Fields, parsedInput.Tags)
 	if err != nil {
 		acc.AddError(err)
 		return nil
@@ -201,6 +191,7 @@ func (plugin *T128GraphQL) createRequest() (*http.Request, error) {
 func decodeAndReportJSONErrors(response []byte, template string) []error {
 	var errors []error
 
+	//TODO: remove this
 	parsedJSON, err := gabs.ParseJSON(response)
 	if err != nil {
 		errors = append(errors, fmt.Errorf(template, response))
@@ -225,17 +216,6 @@ func decodeAndReportJSONErrors(response []byte, template string) []error {
 		errors = append(errors, fmt.Errorf(template, errorNode["message"].(string)))
 	}
 	return errors
-}
-
-func isNil(i interface{}) bool {
-	if i == nil {
-		return true
-	}
-	switch reflect.TypeOf(i).Kind() {
-	case reflect.Ptr, reflect.Map, reflect.Array, reflect.Chan, reflect.Slice:
-		return reflect.ValueOf(i).IsNil()
-	}
-	return false
 }
 
 func init() {

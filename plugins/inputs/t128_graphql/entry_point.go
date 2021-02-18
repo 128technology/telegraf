@@ -5,14 +5,17 @@ import (
 )
 
 //ParsedEntryPoint stores paths and paths to fields, tags and predicates used by queryBuilder and responseProcessor
+//TODO: rename tags and fields
+//TODO: rename file
 type ParsedEntryPoint struct {
-	ResponsePath string
-	QueryPath    string
-	Predicates   map[string]string
+	QueryPath  string
+	Predicates map[string]string
+	Fields     map[string]string
+	Tags       map[string]string
 }
 
 //ParseEntryPoint converts an entry point into a corresponding responsePath, queryPath and predicates
-func ParseEntryPoint(entryPoint string) *ParsedEntryPoint {
+func ParseEntryPoint(entryPoint string, fieldsIn map[string]string, tagsIn map[string]string) *ParsedEntryPoint {
 	responsePath := "/data/"
 	queryPath := ""
 	predicateMap := map[string]string{}
@@ -29,18 +32,26 @@ func ParseEntryPoint(entryPoint string) *ParsedEntryPoint {
 		} else {
 			queryPath += element + "."
 			if idx < len(pathElements)-2 {
-				responsePath += element + "/0/"
+				responsePath += element + "/"
 			} else {
 				responsePath += element + "/"
 			}
 		}
 	}
-	responsePath = strings.TrimRight(responsePath, "/")
-	return &ParsedEntryPoint{ResponsePath: responsePath, QueryPath: queryPath, Predicates: predicateMap}
+
+	fields := map[string]string{}
+	tags := map[string]string{}
+	for fieldRenamed, path := range fieldsIn {
+		fields[responsePath+path] = fieldRenamed
+	}
+	for tagRenamed, path := range tagsIn {
+		tags[responsePath+path] = tagRenamed
+	}
+
+	return &ParsedEntryPoint{QueryPath: queryPath, Predicates: predicateMap, Fields: fields, Tags: tags}
 }
 
 func parsePredicate(predicate string) string {
-	//TODO: switch back brackets and parens
 	var replacer = strings.NewReplacer(" ", "")
 	return replacer.Replace(predicate)
 }

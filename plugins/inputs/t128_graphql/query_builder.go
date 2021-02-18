@@ -81,7 +81,7 @@ func BuildQuery(entryPoint string, fields map[string]string, tags map[string]str
 func buildQueryObject(entryPoint string, fields map[string]string, tags map[string]string) *gabs.Container {
 	jsonObj := gabs.New()
 
-	parsedEntryPoint := ParseEntryPoint(entryPoint)
+	parsedEntryPoint := ParseEntryPoint(entryPoint, fields, tags)
 
 	addToQueryObj(jsonObj, parsedEntryPoint.Predicates, false, "")
 	addToQueryObj(jsonObj, fields, true, parsedEntryPoint.QueryPath)
