@@ -15,13 +15,37 @@ var JSONPathFormationTestCases = []struct {
 }{
 	{
 		Name:       "build arp state json path",
-		EntryPoint: "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
+		EntryPoint: "allRouters(name:\"ComboEast\")/nodes/nodes(name:\"east-combo\")/nodes/arp/nodes",
 		ExpectedOutput: &plugin.ParsedEntryPoint{
 			ResponsePath: "/data/allRouters/nodes/0/nodes/nodes/0/arp/nodes",
 			QueryPath:    "allRouters.nodes.nodes.nodes.arp.nodes.",
 			Predicates: map[string]string{
-				"allRouters.$name":             "ComboEast",
-				"allRouters.nodes.nodes.$name": "east-combo",
+				"(name:\"ComboEast\")":  "allRouters.$predicate",
+				"(name:\"east-combo\")": "allRouters.nodes.nodes.$predicate",
+			},
+		},
+	},
+	{
+		Name:       "process predicate with list",
+		EntryPoint: "allRouters(names:[\"wan\",\"lan\"])/nodes/nodes(name:\"east-combo\")/nodes/arp/nodes",
+		ExpectedOutput: &plugin.ParsedEntryPoint{
+			ResponsePath: "/data/allRouters/nodes/0/nodes/nodes/0/arp/nodes",
+			QueryPath:    "allRouters.nodes.nodes.nodes.arp.nodes.",
+			Predicates: map[string]string{
+				"(names:[\"wan\",\"lan\"])": "allRouters.$predicate",
+				"(name:\"east-combo\")":     "allRouters.nodes.nodes.$predicate",
+			},
+		},
+	},
+	{
+		Name:       "process multiple sub-predicates",
+		EntryPoint: "allRouters(names:[\"wan\", \"lan\"], key2:\"value2\")/nodes/nodes(name:\"east-combo\")/nodes/arp/nodes",
+		ExpectedOutput: &plugin.ParsedEntryPoint{
+			ResponsePath: "/data/allRouters/nodes/0/nodes/nodes/0/arp/nodes",
+			QueryPath:    "allRouters.nodes.nodes.nodes.arp.nodes.",
+			Predicates: map[string]string{
+				"(names:[\"wan\",\"lan\"],key2:\"value2\")": "allRouters.$predicate",
+				"(name:\"east-combo\")":                     "allRouters.nodes.nodes.$predicate",
 			},
 		},
 	},

@@ -13,7 +13,7 @@ var sampleConfig = `
 # unix_socket = "/var/run/128technology/web-server.sock"
 
 ## The starting point in the graphQL tree for all configured tags and fields
-# entry_point = "allRouters[name:RTR_WEST_COMBO]/nodes/nodes[name:combo-west]/nodes/arp/nodes"
+# entry_point = "allRouters(name:\"ComboEast\")/nodes/nodes(name:\"combo-east\")/nodes/arp/nodes"
 
 ## Amount of time allowed to complete a single HTTP request
 # timeout = "5s"

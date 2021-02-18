@@ -24,6 +24,7 @@ const (
 )
 
 // T128GraphQL is an input for metrics of a 128T router instance
+//TODO: check public/private
 type T128GraphQL struct {
 	CollectorName string            `toml:"collector_name"`
 	BaseURL       string            `toml:"base_url"`
