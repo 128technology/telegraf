@@ -7,46 +7,56 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//TODO: more unit tests - MON-314
 var JSONPathFormationTestCases = []struct {
 	Name           string
 	EntryPoint     string
+	Fields         map[string]string
+	Tags           map[string]string
 	ExpectedOutput *plugin.ParsedEntryPoint
 }{
 	{
-		Name:       "build arp state json path",
+		Name:       "process simple input",
 		EntryPoint: "allRouters(name:\"ComboEast\")/nodes/nodes(name:\"east-combo\")/nodes/arp/nodes",
+		Fields:     map[string]string{"test-field": "test-field"},
+		Tags:       map[string]string{"test-tag": "test-tag"},
 		ExpectedOutput: &plugin.ParsedEntryPoint{
-			ResponsePath: "/data/allRouters/nodes/0/nodes/nodes/0/arp/nodes",
-			QueryPath:    "allRouters.nodes.nodes.nodes.arp.nodes.",
+			QueryPath: "allRouters.nodes.nodes.nodes.arp.nodes.",
 			Predicates: map[string]string{
 				"(name:\"ComboEast\")":  "allRouters.$predicate",
 				"(name:\"east-combo\")": "allRouters.nodes.nodes.$predicate",
 			},
+			Fields: map[string]string{"/data/allRouters/nodes/nodes/nodes/arp/nodes/test-field": "test-field"},
+			Tags:   map[string]string{"/data/allRouters/nodes/nodes/nodes/arp/nodes/test-tag": "test-tag"},
 		},
 	},
 	{
 		Name:       "process predicate with list",
 		EntryPoint: "allRouters(names:[\"wan\",\"lan\"])/nodes/nodes(name:\"east-combo\")/nodes/arp/nodes",
+		Fields:     map[string]string{"test-field": "test-field"},
+		Tags:       map[string]string{"test-tag": "test-tag"},
 		ExpectedOutput: &plugin.ParsedEntryPoint{
-			ResponsePath: "/data/allRouters/nodes/0/nodes/nodes/0/arp/nodes",
-			QueryPath:    "allRouters.nodes.nodes.nodes.arp.nodes.",
+			QueryPath: "allRouters.nodes.nodes.nodes.arp.nodes.",
 			Predicates: map[string]string{
 				"(names:[\"wan\",\"lan\"])": "allRouters.$predicate",
 				"(name:\"east-combo\")":     "allRouters.nodes.nodes.$predicate",
 			},
+			Fields: map[string]string{"/data/allRouters/nodes/nodes/nodes/arp/nodes/test-field": "test-field"},
+			Tags:   map[string]string{"/data/allRouters/nodes/nodes/nodes/arp/nodes/test-tag": "test-tag"},
 		},
 	},
 	{
-		Name:       "process multiple sub-predicates",
+		Name:       "process multiple predicates",
 		EntryPoint: "allRouters(names:[\"wan\", \"lan\"], key2:\"value2\")/nodes/nodes(name:\"east-combo\")/nodes/arp/nodes",
+		Fields:     map[string]string{"test-field": "test-field"},
+		Tags:       map[string]string{"test-tag": "test-tag"},
 		ExpectedOutput: &plugin.ParsedEntryPoint{
-			ResponsePath: "/data/allRouters/nodes/0/nodes/nodes/0/arp/nodes",
-			QueryPath:    "allRouters.nodes.nodes.nodes.arp.nodes.",
+			QueryPath: "allRouters.nodes.nodes.nodes.arp.nodes.",
 			Predicates: map[string]string{
 				"(names:[\"wan\",\"lan\"],key2:\"value2\")": "allRouters.$predicate",
 				"(name:\"east-combo\")":                     "allRouters.nodes.nodes.$predicate",
 			},
+			Fields: map[string]string{"/data/allRouters/nodes/nodes/nodes/arp/nodes/test-field": "test-field"},
+			Tags:   map[string]string{"/data/allRouters/nodes/nodes/nodes/arp/nodes/test-tag": "test-tag"},
 		},
 	},
 }
@@ -54,7 +64,7 @@ var JSONPathFormationTestCases = []struct {
 func TestT128GraphqlEntryPointParsing(t *testing.T) {
 	for _, testCase := range JSONPathFormationTestCases {
 		t.Run(testCase.Name, func(t *testing.T) {
-			parsedEntryPoint := plugin.ParseEntryPoint(testCase.EntryPoint)
+			parsedEntryPoint := plugin.ParseEntryPoint(testCase.EntryPoint, testCase.Fields, testCase.Tags)
 			require.Equal(t, testCase.ExpectedOutput, parsedEntryPoint)
 		})
 	}

@@ -61,7 +61,7 @@ var CollectorTestCases = []struct {
 		Endpoint:        Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestSingleTag, "{}"},
 		ExpectedMetrics: nil,
 		ExpectedErrors: []string{
-			"unexpected response for collector test-collector: {}",
+			"no data collected for response: {}",
 		},
 	},
 	{
@@ -107,7 +107,7 @@ var CollectorTestCases = []struct {
 		ExpectedErrors:  []string{"unexpected response for collector test-collector: Cannot query field \"invalid-field\" on type \"ArpEntryType\"."},
 	},
 	{
-		Name:       "processes response with single tag and field", //more cases units are tested separately
+		Name:       "processes simple response", //more cases units are tested separately
 		EntryPoint: "allRouters(name:\"ComboEast\")/nodes/nodes(name:\"east-combo\")/nodes/arp/nodes",
 		Fields:     map[string]string{"test-field": "test-field"},
 		Tags:       map[string]string{"test-tag": "test-tag"},

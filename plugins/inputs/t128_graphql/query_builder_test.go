@@ -14,7 +14,6 @@ const (
 	ValidQueryNestedTag   = "query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\nstate{\ntest-tag-2}\ntest-field\ntest-tag-1}}}}}}}"
 )
 
-//TODO: more unit tests - MON-314
 var QueryFormationTestCases = []struct {
 	Name          string
 	EntryPoint    string
@@ -89,7 +88,7 @@ var QueryFormationTestCases = []struct {
 			test-tag-1}}}}}}}`, "\t", ""),
 	},
 	{
-		Name:       "build query multiple sub-predicates",
+		Name:       "build query multiple predicates",
 		EntryPoint: "allRouters(names:[\"wan\", \"lan\"], key2:\"value2\")/nodes/nodes(name:\"east-combo\")/nodes/arp/nodes",
 		Fields:     map[string]string{"test-field": "test-field"},
 		Tags:       map[string]string{"test-tag-1": "test-tag-1", "test-tag-2": "state1/state2/state3/test-tag-2"},
