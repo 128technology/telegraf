@@ -23,40 +23,78 @@ var QueryFormationTestCases = []struct {
 	ExpectedQuery string
 }{
 	{
-		Name:          "convert simple query single tag",
-		EntryPoint:    "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
+		Name:          "build simple query single tag",
+		EntryPoint:    "allRouters(name:\"ComboEast\")/nodes/nodes(name:\"east-combo\")/nodes/arp/nodes",
 		Fields:        map[string]string{"test-field": "test-field"},
 		Tags:          map[string]string{"test-tag": "test-tag"},
 		ExpectedQuery: ValidQuerySingleTag,
 	},
 	{
-		Name:          "convert simple query double tag",
-		EntryPoint:    "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
+		Name:          "build simple query double tag",
+		EntryPoint:    "allRouters(name:\"ComboEast\")/nodes/nodes(name:\"east-combo\")/nodes/arp/nodes",
 		Fields:        map[string]string{"test-field": "test-field"},
 		Tags:          map[string]string{"test-tag-1": "test-tag-1", "test-tag-2": "test-tag-2"},
 		ExpectedQuery: ValidQueryDoubleTag,
 	},
 	{
-		Name:          "convert simple query double field",
-		EntryPoint:    "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
+		Name:          "build simple query double field",
+		EntryPoint:    "allRouters(name:\"ComboEast\")/nodes/nodes(name:\"east-combo\")/nodes/arp/nodes",
 		Fields:        map[string]string{"test-field-1": "test-field-1", "test-field-2": "test-field-2"},
 		Tags:          map[string]string{"test-tag": "test-tag"},
 		ExpectedQuery: ValidQueryDoubleField,
 	},
 	{
-		Name:          "convert query nested tag",
-		EntryPoint:    "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
+		Name:          "build query nested tag",
+		EntryPoint:    "allRouters(name:\"ComboEast\")/nodes/nodes(name:\"east-combo\")/nodes/arp/nodes",
 		Fields:        map[string]string{"test-field": "test-field"},
 		Tags:          map[string]string{"test-tag-1": "test-tag-1", "test-tag-2": "state/test-tag-2"},
 		ExpectedQuery: ValidQueryNestedTag,
 	},
 	{
-		Name:       "convert query multi-level-nested tag",
-		EntryPoint: "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
+		Name:       "build query multi-level-nested tag",
+		EntryPoint: "allRouters(name:\"ComboEast\")/nodes/nodes(name:\"east-combo\")/nodes/arp/nodes",
 		Fields:     map[string]string{"test-field": "test-field"},
 		Tags:       map[string]string{"test-tag-1": "test-tag-1", "test-tag-2": "state1/state2/state3/test-tag-2"},
 		ExpectedQuery: strings.ReplaceAll(`query {
 			allRouters(name:"ComboEast"){
+			nodes{
+			nodes(name:"east-combo"){
+			nodes{
+			arp{
+			nodes{
+			state1{
+			state2{
+			state3{
+			test-tag-2}}}
+			test-field
+			test-tag-1}}}}}}}`, "\t", ""),
+	},
+	{
+		Name:       "build query list predicate",
+		EntryPoint: "allRouters(names:[\"wan\",\"lan\"])/nodes/nodes(name:\"east-combo\")/nodes/arp/nodes",
+		Fields:     map[string]string{"test-field": "test-field"},
+		Tags:       map[string]string{"test-tag-1": "test-tag-1", "test-tag-2": "state1/state2/state3/test-tag-2"},
+		ExpectedQuery: strings.ReplaceAll(`query {
+			allRouters(names:["wan","lan"]){
+			nodes{
+			nodes(name:"east-combo"){
+			nodes{
+			arp{
+			nodes{
+			state1{
+			state2{
+			state3{
+			test-tag-2}}}
+			test-field
+			test-tag-1}}}}}}}`, "\t", ""),
+	},
+	{
+		Name:       "build query multiple sub-predicates",
+		EntryPoint: "allRouters(names:[\"wan\", \"lan\"], key2:\"value2\")/nodes/nodes(name:\"east-combo\")/nodes/arp/nodes",
+		Fields:     map[string]string{"test-field": "test-field"},
+		Tags:       map[string]string{"test-tag-1": "test-tag-1", "test-tag-2": "state1/state2/state3/test-tag-2"},
+		ExpectedQuery: strings.ReplaceAll(`query {
+			allRouters(names:["wan","lan"],key2:"value2"){
 			nodes{
 			nodes(name:"east-combo"){
 			nodes{

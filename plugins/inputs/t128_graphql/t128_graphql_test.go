@@ -54,7 +54,7 @@ var CollectorTestCases = []struct {
 	},
 	{
 		Name:            "empty response produces error",
-		EntryPoint:      "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
+		EntryPoint:      "allRouters(name:\"ComboEast\")/nodes/nodes(name:\"east-combo\")/nodes/arp/nodes",
 		Fields:          map[string]string{"test-field": "test-field"},
 		Tags:            map[string]string{"test-tag": "test-tag"},
 		Query:           ValidQuerySingleTag,
@@ -66,7 +66,7 @@ var CollectorTestCases = []struct {
 	},
 	{
 		Name:            "propogates not found error to accumulator",
-		EntryPoint:      "allRouters[name:not-a-router]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
+		EntryPoint:      "allRouters(name:\"not-a-router\")/nodes/nodes(name:\"east-combo\")/nodes/arp/nodes",
 		Fields:          map[string]string{"test-field": "test-field"},
 		Tags:            map[string]string{"test-tag": "test-tag"},
 		Query:           InvalidRouterQuery,
@@ -78,7 +78,7 @@ var CollectorTestCases = []struct {
 	},
 	{
 		Name:            "propogates invalid json error to accumulator",
-		EntryPoint:      "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
+		EntryPoint:      "allRouters(name:\"ComboEast\")/nodes/nodes(name:\"east-combo\")/nodes/arp/nodes",
 		Fields:          map[string]string{"test-field": "test-field"},
 		Tags:            map[string]string{"test-tag": "test-tag"},
 		Query:           ValidQuerySingleTag,
@@ -88,7 +88,7 @@ var CollectorTestCases = []struct {
 	},
 	{
 		Name:       "propogates graphQL error to accumulator",
-		EntryPoint: "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
+		EntryPoint: "allRouters(name:\"ComboEast\")/nodes/nodes(name:\"east-combo\")/nodes/arp/nodes",
 		Fields:     map[string]string{"invalid-field": "invalid-field"},
 		Tags:       map[string]string{"test-tag": "test-tag"},
 		Query:      InvalidFieldQuery,
@@ -108,7 +108,7 @@ var CollectorTestCases = []struct {
 	},
 	{
 		Name:       "processes response with single tag and field", //more cases units are tested separately
-		EntryPoint: "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
+		EntryPoint: "allRouters(name:\"ComboEast\")/nodes/nodes(name:\"east-combo\")/nodes/arp/nodes",
 		Fields:     map[string]string{"test-field": "test-field"},
 		Tags:       map[string]string{"test-tag": "test-tag"},
 		Query:      ValidQuerySingleTag,

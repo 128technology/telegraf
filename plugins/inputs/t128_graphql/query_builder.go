@@ -18,7 +18,7 @@ const (
 BuildQuery first creates an intermediary query object that is traversed by buildQueryBody() in pre-order
 
 Args:
-	entryPoint example - "allRouters[name:ComboEast]/nodes/nodes[name:combo-east]/nodes/arp/nodes"
+	entryPoint example - "allRouters(name:\"ComboEast\)/nodes/nodes(name:\"combo-east\")/nodes/arp/nodes"
 	fields example - map[string]string{"enabled": "enabled"}
 	tags example - map[string]string{
 			"name": "name",
@@ -30,10 +30,10 @@ Example:
 
 	{
 		"allRouters": {
-			"$name":"ComboEast",
+			"$predicate": "(name:\"ComboEast\")",
 			"nodes": {
 				"nodes": {
-					"$name":"combo-east",
+					"$predicate":"(name:\"east-combo\")",
 					"nodes": {
 						"arp": {
 							"nodes": {
@@ -83,24 +83,17 @@ func buildQueryObject(entryPoint string, fields map[string]string, tags map[stri
 
 	parsedEntryPoint := ParseEntryPoint(entryPoint)
 
-	addToQueryObj(jsonObj, parsedEntryPoint.Predicates, true, false, "")
-	addToQueryObj(jsonObj, fields, false, true, parsedEntryPoint.QueryPath)
-	addToQueryObj(jsonObj, tags, false, true, parsedEntryPoint.QueryPath)
+	addToQueryObj(jsonObj, parsedEntryPoint.Predicates, false, "")
+	addToQueryObj(jsonObj, fields, true, parsedEntryPoint.QueryPath)
+	addToQueryObj(jsonObj, tags, true, parsedEntryPoint.QueryPath)
 
 	return jsonObj
 }
 
-func addToQueryObj(jsonObj *gabs.Container, items map[string]string, keyIsPath bool, usesSlash bool, basePath string) {
+func addToQueryObj(jsonObj *gabs.Container, items map[string]string, usesSlash bool, basePath string) {
 	var replacer = strings.NewReplacer("/", ".")
-	dictSwap := func(key string, value string) (string, string) {
-		if keyIsPath {
-			return value, key
-		}
-		return key, value
-	}
 
 	for key, value := range items {
-		key, value = dictSwap(key, value)
 		//TODO: preprocess to remove usesSlash - MON-315
 		if usesSlash {
 			partialPath := replacer.Replace(value)
@@ -133,7 +126,7 @@ func buildQueryBody(jsonObj *gabs.Container, w io.Writer) {
 		//TODO: safely type-asert - MON-315
 		//add predicates like (name:"ComboEast") to the query
 		if strings.HasPrefix(key, predicateTag) {
-			writePredicate(w, fmt.Sprintf("(%s:\"%s\"){", key[1:], jsonChildren[key].Data().(string)))
+			writePredicate(w, fmt.Sprintf(jsonChildren[key].Data().(string)+"{"))
 			continue
 		}
 		children++
