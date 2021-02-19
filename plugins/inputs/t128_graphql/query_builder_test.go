@@ -111,7 +111,8 @@ var QueryFormationTestCases = []struct {
 func TestT128GraphqlQueryFormation(t *testing.T) {
 	for _, testCase := range QueryFormationTestCases {
 		t.Run(testCase.Name, func(t *testing.T) {
-			query := plugin.BuildQuery(testCase.EntryPoint, testCase.Fields, testCase.Tags)
+			config := plugin.LoadConfig(testCase.EntryPoint, testCase.Fields, testCase.Tags)
+			query := plugin.BuildQuery(config)
 			require.Equal(t, testCase.ExpectedQuery, query)
 		})
 	}
