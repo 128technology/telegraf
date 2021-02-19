@@ -32,6 +32,7 @@ type T128GraphQL struct {
 	Tags          map[string]string `toml:"extract_tags"`
 	Timeout       internal.Duration `toml:"timeout"`
 
+	Config      *Config
 	Query       string
 	requestBody []byte
 	client      *http.Client
@@ -50,14 +51,15 @@ func (*T128GraphQL) Description() string {
 // Init sets up the input to be ready for action
 func (plugin *T128GraphQL) Init() error {
 
-	//check config
+	//check and load config
 	err := plugin.checkConfig()
 	if err != nil {
 		return err
 	}
+	plugin.Config = LoadConfig(plugin.EntryPoint, plugin.Fields, plugin.Tags)
 
 	//build query, json path to data and request body
-	plugin.Query = BuildQuery(plugin.EntryPoint, plugin.Fields, plugin.Tags)
+	plugin.Query = BuildQuery(plugin.Config)
 
 	content := struct {
 		Query string `json:"query,omitempty"`
@@ -160,8 +162,7 @@ func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 		return nil
 	}
 
-	parsedInput := ParseEntryPoint(plugin.EntryPoint, plugin.Fields, plugin.Tags)
-	processedResponses, err := ProcessResponse(jsonParsed, parsedInput.Fields, parsedInput.Tags)
+	processedResponses, err := ProcessResponse(jsonParsed, plugin.Config.Fields, plugin.Config.Tags)
 	if err != nil {
 		acc.AddError(err)
 		return nil
@@ -191,7 +192,6 @@ func (plugin *T128GraphQL) createRequest() (*http.Request, error) {
 func decodeAndReportJSONErrors(response []byte, template string) []error {
 	var errors []error
 
-	//TODO: remove this
 	parsedJSON, err := gabs.ParseJSON(response)
 	if err != nil {
 		errors = append(errors, fmt.Errorf(template, response))
@@ -211,9 +211,9 @@ func decodeAndReportJSONErrors(response []byte, template string) []error {
 	}
 
 	for _, child := range jsonChildren {
-		//TODO: safely type-asert - MON-315
 		errorNode := child.Data().(map[string]interface{})
-		errors = append(errors, fmt.Errorf(template, errorNode["message"].(string)))
+		message := fmt.Sprintf("%v", errorNode["message"])
+		errors = append(errors, fmt.Errorf(template, message))
 	}
 	return errors
 }

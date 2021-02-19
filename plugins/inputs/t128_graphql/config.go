@@ -4,21 +4,22 @@ import (
 	"strings"
 )
 
-//ParsedEntryPoint stores paths and paths to fields, tags and predicates used by queryBuilder and responseProcessor
-//TODO: rename tags and fields
-//TODO: rename file
-type ParsedEntryPoint struct {
+//Config stores paths and paths to fields, tags and predicates used by queryBuilder and responseProcessor
+type Config struct {
 	QueryPath  string
 	Predicates map[string]string
 	Fields     map[string]string
 	Tags       map[string]string
+	RawFields  map[string]string //Fields is used with RawFields to build the query
+	RawTags    map[string]string
 }
 
-//ParseEntryPoint converts an entry point into a corresponding responsePath, queryPath and predicates
-func ParseEntryPoint(entryPoint string, fieldsIn map[string]string, tagsIn map[string]string) *ParsedEntryPoint {
+//LoadConfig converts an entry point into a corresponding responsePath, queryPath and predicates
+func LoadConfig(entryPoint string, fieldsIn map[string]string, tagsIn map[string]string) *Config {
+	config := newConfig()
 	responsePath := "/data/"
 	queryPath := ""
-	predicateMap := map[string]string{}
+	predicates := map[string]string{}
 
 	pathElements := strings.Split(entryPoint, "/")
 	for idx, element := range pathElements {
@@ -26,7 +27,7 @@ func ParseEntryPoint(entryPoint string, fieldsIn map[string]string, tagsIn map[s
 		if parenIdx > 0 {
 			queryPath += element[:parenIdx]
 			predicatePath := queryPath + "." + predicateTag + "predicate"
-			predicateMap[parsePredicate(element[parenIdx:])] = predicatePath
+			predicates[parsePredicate(element[parenIdx:])] = predicatePath
 			queryPath += "."
 			responsePath += element[:parenIdx] + "/"
 		} else {
@@ -48,10 +49,28 @@ func ParseEntryPoint(entryPoint string, fieldsIn map[string]string, tagsIn map[s
 		tags[responsePath+path] = tagRenamed
 	}
 
-	return &ParsedEntryPoint{QueryPath: queryPath, Predicates: predicateMap, Fields: fields, Tags: tags}
+	config.QueryPath = queryPath
+	config.Predicates = predicates
+	config.Fields = fields
+	config.Tags = tags
+	config.RawFields = fieldsIn
+	config.RawTags = tagsIn
+
+	return config
 }
 
 func parsePredicate(predicate string) string {
 	var replacer = strings.NewReplacer(" ", "")
 	return replacer.Replace(predicate)
+}
+
+func newConfig() *Config {
+	return &Config{
+		QueryPath:  "",
+		Predicates: map[string]string{},
+		Fields:     map[string]string{},
+		Tags:       map[string]string{},
+		RawFields:  map[string]string{},
+		RawTags:    map[string]string{},
+	}
 }

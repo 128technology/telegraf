@@ -65,12 +65,12 @@ Example:
 	state{
 	adminStatus}}}}}}}}
 */
-func BuildQuery(entryPoint string, fields map[string]string, tags map[string]string) string {
+func BuildQuery(config *Config) string {
 	query := "query "
 
 	var buf bytes.Buffer
 	w := io.Writer(&buf)
-	jsonObj := buildQueryObject(entryPoint, fields, tags)
+	jsonObj := buildQueryObject(config)
 	buildQueryBody(jsonObj, w)
 
 	query += buf.String()
@@ -78,29 +78,32 @@ func BuildQuery(entryPoint string, fields map[string]string, tags map[string]str
 }
 
 //buildQueryBody creates an intermediary query object that is traversed by buildQueryBody
-func buildQueryObject(entryPoint string, fields map[string]string, tags map[string]string) *gabs.Container {
+func buildQueryObject(config *Config) *gabs.Container {
 	jsonObj := gabs.New()
 
-	parsedEntryPoint := ParseEntryPoint(entryPoint, fields, tags)
+	//parsedEntryPoint := ParseEntryPoint(entryPoint, fields, tags)
 
-	addToQueryObj(jsonObj, parsedEntryPoint.Predicates, false, "")
-	addToQueryObj(jsonObj, fields, true, parsedEntryPoint.QueryPath)
-	addToQueryObj(jsonObj, tags, true, parsedEntryPoint.QueryPath)
+	addToQueryObj(jsonObj, config.Predicates, "")
+	addToQueryObj(jsonObj, formatPaths(config.RawFields), config.QueryPath)
+	addToQueryObj(jsonObj, formatPaths(config.RawTags), config.QueryPath)
 
 	return jsonObj
 }
 
-func addToQueryObj(jsonObj *gabs.Container, items map[string]string, usesSlash bool, basePath string) {
+// the config uses a "/" json syntax but json helpers call for "." syntax
+func formatPaths(predicates map[string]string) map[string]string {
+	newMap := make(map[string]string)
 	var replacer = strings.NewReplacer("/", ".")
 
+	for key, val := range predicates {
+		newMap[key] = replacer.Replace(val)
+	}
+	return newMap
+}
+
+func addToQueryObj(jsonObj *gabs.Container, items map[string]string, basePath string) {
 	for key, value := range items {
-		//TODO: preprocess to remove usesSlash - MON-315
-		if usesSlash {
-			partialPath := replacer.Replace(value)
-			jsonObj.SetP(key, basePath+partialPath)
-		} else {
-			jsonObj.SetP(key, basePath+value)
-		}
+		jsonObj.SetP(key, basePath+value)
 	}
 }
 
@@ -123,10 +126,9 @@ func buildQueryBody(jsonObj *gabs.Container, w io.Writer) {
 
 	children := 0
 	for i, key := range keys {
-		//TODO: safely type-asert - MON-315
 		//add predicates like (name:"ComboEast") to the query
 		if strings.HasPrefix(key, predicateTag) {
-			writePredicate(w, fmt.Sprintf(jsonChildren[key].Data().(string)+"{"))
+			writePredicate(w, fmt.Sprintf("%v", jsonChildren[key].Data())+"{")
 			continue
 		}
 		children++
