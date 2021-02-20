@@ -15,56 +15,44 @@ var JSONPathFormationTestCases = []struct {
 	ExpectedOutput *plugin.Config
 }{
 	{
-		Name:       "process simple input",
-		EntryPoint: "allRouters(name:\"ComboEast\")/nodes/nodes(name:\"east-combo\")/nodes/arp/nodes",
-		Fields:     getTestFields(),
-		Tags:       getTestTags(),
-		ExpectedOutput: &plugin.Config{
-			QueryPath: "allRouters.nodes.nodes.nodes.arp.nodes.",
-			Predicates: map[string]string{
-				"(name:\"ComboEast\")":  "allRouters.$predicate",
-				"(name:\"east-combo\")": "allRouters.nodes.nodes.$predicate",
-			},
-			Fields:    map[string]string{"/data/allRouters/nodes/nodes/nodes/arp/nodes/test-field": "test-field"},
-			Tags:      map[string]string{"/data/allRouters/nodes/nodes/nodes/arp/nodes/test-tag": "test-tag"},
-			RawFields: getTestFields(),
-			RawTags:   getTestTags(),
-		},
+		Name:           "process simple input",
+		EntryPoint:     "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
+		Fields:         getTestFields(),
+		Tags:           getTestTags(),
+		ExpectedOutput: getTestConfigWithPredicates("(name:\"ComboEast\")", "(name:\"east-combo\")"),
 	},
 	{
-		Name:       "process predicate with list",
-		EntryPoint: "allRouters(names:[\"wan\",\"lan\"])/nodes/nodes(name:\"east-combo\")/nodes/arp/nodes",
-		Fields:     getTestFields(),
-		Tags:       getTestTags(),
-		ExpectedOutput: &plugin.Config{
-			QueryPath: "allRouters.nodes.nodes.nodes.arp.nodes.",
-			Predicates: map[string]string{
-				"(names:[\"wan\",\"lan\"])": "allRouters.$predicate",
-				"(name:\"east-combo\")":     "allRouters.nodes.nodes.$predicate",
-			},
-			Fields:    map[string]string{"/data/allRouters/nodes/nodes/nodes/arp/nodes/test-field": "test-field"},
-			Tags:      map[string]string{"/data/allRouters/nodes/nodes/nodes/arp/nodes/test-tag": "test-tag"},
-			RawFields: getTestFields(),
-			RawTags:   getTestTags(),
-		},
+		Name:           "process predicate with list",
+		EntryPoint:     "allRouters(names:['wan','lan'])/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
+		Fields:         getTestFields(),
+		Tags:           getTestTags(),
+		ExpectedOutput: getTestConfigWithPredicates("(names:[\"wan\",\"lan\"])", "(name:\"east-combo\")"),
 	},
 	{
-		Name:       "process multiple predicates",
-		EntryPoint: "allRouters(names:[\"wan\", \"lan\"], key2:\"value2\")/nodes/nodes(name:\"east-combo\")/nodes/arp/nodes",
-		Fields:     getTestFields(),
-		Tags:       getTestTags(),
-		ExpectedOutput: &plugin.Config{
-			QueryPath: "allRouters.nodes.nodes.nodes.arp.nodes.",
-			Predicates: map[string]string{
-				"(names:[\"wan\",\"lan\"],key2:\"value2\")": "allRouters.$predicate",
-				"(name:\"east-combo\")":                     "allRouters.nodes.nodes.$predicate",
-			},
-			Fields:    map[string]string{"/data/allRouters/nodes/nodes/nodes/arp/nodes/test-field": "test-field"},
-			Tags:      map[string]string{"/data/allRouters/nodes/nodes/nodes/arp/nodes/test-tag": "test-tag"},
-			RawFields: getTestFields(),
-			RawTags:   getTestTags(),
-		},
+		Name:           "process multi-value predicates",
+		EntryPoint:     "allRouters(names:['wan', 'lan'], key2:'value2')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
+		Fields:         getTestFields(),
+		Tags:           getTestTags(),
+		ExpectedOutput: getTestConfigWithPredicates("(names:[\"wan\",\"lan\"],key2:\"value2\")", "(name:\"east-combo\")"),
 	},
+	{
+		Name:           "process complex config",
+		EntryPoint:     "allRouters(names:['wan', 'lan'], key2:'value2')/nodes/nodes(names:['east-combo', 'west-combo'])/nodes/arp/nodes",
+		Fields:         getTestFields(),
+		Tags:           getTestTags(),
+		ExpectedOutput: getTestConfigWithPredicates("(names:[\"wan\",\"lan\"],key2:\"value2\")", "(names:[\"east-combo\",\"west-combo\"])"),
+	},
+}
+
+func getTestConfigWithPredicates(pred1 string, pred2 string) *plugin.Config {
+	return &plugin.Config{
+		Predicates: map[string]string{
+			".data.allRouters.$predicate":             pred1,
+			".data.allRouters.nodes.nodes.$predicate": pred2,
+		},
+		Fields: map[string]string{".data.allRouters.nodes.nodes.nodes.arp.nodes.test-field": "test-field"},
+		Tags:   map[string]string{".data.allRouters.nodes.nodes.nodes.arp.nodes.test-tag": "test-tag"},
+	}
 }
 
 func TestT128GraphqlEntryPointParsing(t *testing.T) {

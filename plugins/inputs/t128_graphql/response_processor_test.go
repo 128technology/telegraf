@@ -1,6 +1,7 @@
 package t128_graphql_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/Jeffail/gabs"
@@ -9,7 +10,7 @@ import (
 )
 
 const (
-	complexResponseBasePath = "/data/allRouters/nodes/peers/nodes"
+	complexResponseBasePath = ".data.allRouters.nodes.peers.nodes"
 )
 
 var ResponseProcessingTestCases = []struct {
@@ -21,9 +22,20 @@ var ResponseProcessingTestCases = []struct {
 	ExpectedError  error
 }{
 	{
-		Name:   "none value is dropped",
+		Name:   "no data produces error",
 		Fields: map[string]string{"/data/test-field": "test-field"},
 		Tags:   map[string]string{"/data/test-tag": "test-tag"},
+		JsonInput: generateJsonTestData([]byte(`{"data": {
+				"test-field": null,
+				"test-tag": null
+			}}`)),
+		ExpectedOutput: nil,
+		ExpectedError:  fmt.Errorf("no data collected for collector test-collector"),
+	},
+	{
+		Name:   "none value is dropped",
+		Fields: map[string]string{".data.test-field": "test-field"},
+		Tags:   map[string]string{".data.test-tag": "test-tag"},
 		JsonInput: generateJsonTestData([]byte(`{"data": {
 				"test-field": null,
 				"test-tag": "test-string"
@@ -38,8 +50,8 @@ var ResponseProcessingTestCases = []struct {
 	},
 	{
 		Name:   "process response with number tag",
-		Fields: map[string]string{"/data/test-field": "test-field"},
-		Tags:   map[string]string{"/data/test-tag": "test-tag"},
+		Fields: map[string]string{".data.test-field": "test-field"},
+		Tags:   map[string]string{".data.test-tag": "test-tag"},
 		JsonInput: generateJsonTestData([]byte(`{"data": {
 				"test-field": 128,
 				"test-tag": 128
@@ -54,8 +66,8 @@ var ResponseProcessingTestCases = []struct {
 	},
 	{
 		Name:   "process response with multiple fields",
-		Fields: map[string]string{"/data/test-field-1": "test-field-1", "/data/test-field-2": "test-field-2"},
-		Tags:   map[string]string{"/data/test-tag": "test-tag"},
+		Fields: map[string]string{".data.test-field-1": "test-field-1", ".data.test-field-2": "test-field-2"},
+		Tags:   map[string]string{".data.test-tag": "test-tag"},
 		JsonInput: generateJsonTestData([]byte(`{"data": {
 				"test-field-1": 128,
 				"test-field-2": 95,
@@ -71,8 +83,8 @@ var ResponseProcessingTestCases = []struct {
 	},
 	{
 		Name:   "process response with multiple tags",
-		Fields: map[string]string{"/data/test-field": "test-field"},
-		Tags:   map[string]string{"/data/test-tag-1": "test-tag-1", "/data/test-tag-2": "test-tag-2"},
+		Fields: map[string]string{".data.test-field": "test-field"},
+		Tags:   map[string]string{".data.test-tag-1": "test-tag-1", ".data.test-tag-2": "test-tag-2"},
 		JsonInput: generateJsonTestData([]byte(`{"data": {
 				"test-field": 128,
 		  		"test-tag-1": "test-string-1",
@@ -88,8 +100,8 @@ var ResponseProcessingTestCases = []struct {
 	},
 	{
 		Name:   "process response with multiple tags some none value",
-		Fields: map[string]string{"/data/test-field": "test-field"},
-		Tags:   map[string]string{"/data/test-tag-1": "test-tag-1", "/data/test-tag-2": "test-tag-2"},
+		Fields: map[string]string{".data.test-field": "test-field"},
+		Tags:   map[string]string{".data.test-tag-1": "test-tag-1", ".data.test-tag-2": "test-tag-2"},
 		JsonInput: generateJsonTestData([]byte(`{"data": {
 				"test-field": 128,
 		  		"test-tag-1": "test-string-1",
@@ -105,8 +117,8 @@ var ResponseProcessingTestCases = []struct {
 	},
 	{
 		Name:   "renames tags and fields",
-		Fields: map[string]string{"/data/test-field": "test-field-renamed"},
-		Tags:   map[string]string{"/data/test-tag": "test-tag-renamed"},
+		Fields: map[string]string{".data.test-field": "test-field-renamed"},
+		Tags:   map[string]string{".data.test-tag": "test-tag-renamed"},
 		JsonInput: generateJsonTestData([]byte(`{"data": {
 				"test-field": 128,
 				"test-tag": 128
@@ -121,8 +133,8 @@ var ResponseProcessingTestCases = []struct {
 	},
 	{
 		Name:   "process response with multiple nodes",
-		Fields: map[string]string{"/data/test-field": "test-field"},
-		Tags:   map[string]string{"/data/test-tag": "test-tag"},
+		Fields: map[string]string{".data.test-field": "test-field"},
+		Tags:   map[string]string{".data.test-tag": "test-tag"},
 		JsonInput: generateJsonTestData([]byte(`{"data": [
 			{
 				"test-field": 128,
@@ -146,8 +158,8 @@ var ResponseProcessingTestCases = []struct {
 	},
 	{
 		Name:   "process response with nested tags",
-		Fields: map[string]string{"/data/test-field": "test-field"},
-		Tags:   map[string]string{"/data/test-tag-1": "test-tag-1", "/data/state/test-tag-2": "test-tag-2"},
+		Fields: map[string]string{".data.test-field": "test-field"},
+		Tags:   map[string]string{".data.test-tag-1": "test-tag-1", ".data.state.test-tag-2": "test-tag-2"},
 		JsonInput: generateJsonTestData([]byte(`{"data": [
 			{
 				"test-field": 128,
@@ -178,8 +190,8 @@ var ResponseProcessingTestCases = []struct {
 	},
 	{
 		Name:   "process response with multi-level nested tags",
-		Fields: map[string]string{"/data/test-field": "test-field"},
-		Tags:   map[string]string{"/data/test-tag-1": "test-tag-1", "/data/state1/state2/state3/test-tag-2": "test-tag-2"},
+		Fields: map[string]string{".data.test-field": "test-field"},
+		Tags:   map[string]string{".data.test-tag-1": "test-tag-1", ".data.state1.state2.state3.test-tag-2": "test-tag-2"},
 		JsonInput: generateJsonTestData([]byte(`{"data": {
 				"test-field": 128,
 				"test-tag-1": "test-string-1",
@@ -201,8 +213,8 @@ var ResponseProcessingTestCases = []struct {
 	},
 	{
 		Name:   "process response with multi-level nested fields",
-		Fields: map[string]string{"/data/state1/state2/state3/test-field-1": "test-field-1", "/data/test-field-2": "test-field-2"},
-		Tags:   map[string]string{"/data/test-tag": "test-tag"},
+		Fields: map[string]string{".data.state1.state2.state3.test-field-1": "test-field-1", ".data.test-field-2": "test-field-2"},
+		Tags:   map[string]string{".data.test-tag": "test-tag"},
 		JsonInput: generateJsonTestData([]byte(`{"data": {
 				"test-field-2": 128,
 				"test-tag": "test-string-1",
@@ -224,8 +236,8 @@ var ResponseProcessingTestCases = []struct {
 	},
 	{
 		Name:   "process response with mixed nesting",
-		Fields: map[string]string{"/data/state1/state2/test-field": "test-field"},
-		Tags:   map[string]string{"/data/test-tag-1": "test-tag-1", "/data/state1/state2/state3/test-tag-2": "test-tag-2"},
+		Fields: map[string]string{".data.state1.state2.test-field": "test-field"},
+		Tags:   map[string]string{".data.test-tag-1": "test-tag-1", ".data.state1.state2.state3.test-tag-2": "test-tag-2"},
 		JsonInput: generateJsonTestData([]byte(`{"data": {
 				"test-tag-1": "test-string-1",
 			  	"state1": {
@@ -248,15 +260,15 @@ var ResponseProcessingTestCases = []struct {
 	{
 		Name: "process complex response",
 		Fields: map[string]string{
-			complexResponseBasePath + "/paths/adjacentAddress":  "adjacent-address",
-			complexResponseBasePath + "/paths/adjacentHostname": "adjacent-hostname",
-			complexResponseBasePath + "/paths/isActive":         "is-active",
-			complexResponseBasePath + "/paths/uptime":           "uptime",
+			complexResponseBasePath + ".paths.adjacentAddress":  "adjacent-address",
+			complexResponseBasePath + ".paths.adjacentHostname": "adjacent-hostname",
+			complexResponseBasePath + ".paths.isActive":         "is-active",
+			complexResponseBasePath + ".paths.uptime":           "uptime",
 		},
 		Tags: map[string]string{
-			complexResponseBasePath + "/name":                  "peer-name",
-			complexResponseBasePath + "/paths/deviceInterface": "device-interface",
-			complexResponseBasePath + "/paths/vlan":            "vlan",
+			complexResponseBasePath + ".name":                  "peer-name",
+			complexResponseBasePath + ".paths.deviceInterface": "device-interface",
+			complexResponseBasePath + ".paths.vlan":            "vlan",
 		},
 		JsonInput: generateJsonTestData([]byte(`{"data": {
 			  "allRouters": {
@@ -347,6 +359,7 @@ func TestT128GraphqlResponseProcessing(t *testing.T) {
 		t.Run(testCase.Name, func(t *testing.T) {
 			processedResponse, err := plugin.ProcessResponse(
 				testCase.JsonInput,
+				"test-collector",
 				testCase.Fields,
 				testCase.Tags,
 			)

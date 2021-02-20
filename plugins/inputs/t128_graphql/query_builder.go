@@ -18,7 +18,7 @@ const (
 BuildQuery first creates an intermediary query object that is traversed by buildQueryBody() in pre-order
 
 Args:
-	entryPoint example - "allRouters(name:\"ComboEast\)/nodes/nodes(name:\"combo-east\")/nodes/arp/nodes"
+	entryPoint example - "allRouters(name:'ComboEast')/nodes/nodes(name:'combo-east')/nodes/arp/nodes"
 	fields example - map[string]string{"enabled": "enabled"}
 	tags example - map[string]string{
 			"name": "name",
@@ -33,7 +33,7 @@ Example:
 			"$predicate": "(name:\"ComboEast\")",
 			"nodes": {
 				"nodes": {
-					"$predicate":"(name:\"east-combo\")",
+					"$predicate":"(name:\"combo-east\")",
 					"nodes": {
 						"arp": {
 							"nodes": {
@@ -81,29 +81,16 @@ func BuildQuery(config *Config) string {
 func buildQueryObject(config *Config) *gabs.Container {
 	jsonObj := gabs.New()
 
-	//parsedEntryPoint := ParseEntryPoint(entryPoint, fields, tags)
-
-	addToQueryObj(jsonObj, config.Predicates, "")
-	addToQueryObj(jsonObj, formatPaths(config.RawFields), config.QueryPath)
-	addToQueryObj(jsonObj, formatPaths(config.RawTags), config.QueryPath)
+	addToQueryObj(jsonObj, config.Predicates)
+	addToQueryObj(jsonObj, config.Fields)
+	addToQueryObj(jsonObj, config.Tags)
 
 	return jsonObj
 }
 
-// the config uses a "/" json syntax but json helpers call for "." syntax
-func formatPaths(predicates map[string]string) map[string]string {
-	newMap := make(map[string]string)
-	var replacer = strings.NewReplacer("/", ".")
-
-	for key, val := range predicates {
-		newMap[key] = replacer.Replace(val)
-	}
-	return newMap
-}
-
-func addToQueryObj(jsonObj *gabs.Container, items map[string]string, basePath string) {
+func addToQueryObj(jsonObj *gabs.Container, items map[string]string) {
 	for key, value := range items {
-		jsonObj.SetP(key, basePath+value)
+		jsonObj.SetP(value, key[6:]) //".data." is added during config step for ProcessResponse but stripped here
 	}
 }
 

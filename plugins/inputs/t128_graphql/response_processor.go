@@ -93,40 +93,39 @@ Definitions:
 	leaf - a single tag/field stored in *ProcessedResponse
 	branch - any *ProcessedResponse that isn't a leaf
 */
-func ProcessResponse(jsonData *gabs.Container, fields map[string]string, tags map[string]string) ([]*ProcessedResponse, error) {
-
+func ProcessResponse(jsonData *gabs.Container, collector string, fields map[string]string, tags map[string]string) ([]*ProcessedResponse, error) {
 	processedResponses := processNode(jsonData, "", fields, tags)
 
-	if len(processedResponses) < 1 {
-		return nil, fmt.Errorf("no data collected for response: %s", jsonData.String())
+	if len(processedResponses) == 1 && getResponseSize(processedResponses[0]) == 0 {
+		return nil, fmt.Errorf("no data collected for collector %s", collector)
 	}
 
 	return processedResponses, nil
 }
 
 func processNode(jsonData *gabs.Container, path string, fields map[string]string, tags map[string]string) []*ProcessedResponse {
-
-	processedRoot, err := processChildren(jsonData, "map", path, fields, tags)
+	processedNode, err := processChildren(jsonData, "map", path, fields, tags)
 	if err == nil {
-		return processedRoot
+		return processedNode
 	}
 
-	processedRoot, err = processChildren(jsonData, "list", path, fields, tags)
+	processedNode, err = processChildren(jsonData, "list", path, fields, tags)
 	if err == nil {
-		return processedRoot
+		return processedNode
 	}
 
 	leaf, err := collectLeaf(jsonData.Data(), "field", path, fields)
 	if err == nil {
-		processedRoot = append(processedRoot, leaf)
+		processedNode = append(processedNode, leaf)
+		return processedNode
 	}
 
 	leaf, err = collectLeaf(jsonData.Data(), "tag", path, tags)
 	if err == nil {
-		processedRoot = append(processedRoot, leaf)
+		processedNode = append(processedNode, leaf)
 	}
 
-	return processedRoot
+	return processedNode
 }
 
 func processChildren(jsonData *gabs.Container, mode string, path string, fields map[string]string, tags map[string]string) ([]*ProcessedResponse, error) {
@@ -143,7 +142,7 @@ func processChildren(jsonData *gabs.Container, mode string, path string, fields 
 		children, err := jsonData.ChildrenMap()
 		if err == nil {
 			for key, child := range children {
-				processChild(child, path+"/"+key)
+				processChild(child, path+"."+key)
 			}
 			return output, nil
 		}
@@ -167,11 +166,9 @@ func processChildren(jsonData *gabs.Container, mode string, path string, fields 
 	return processAsList()
 }
 
-/*
-Definitions:
-leaf - a single tag/field stored in *ProcessedResponse
-branch - any *ProcessedResponse that isn't a leaf
-*/
+//Definitions:
+//leaf - a single tag/field stored in *ProcessedResponse
+//branch - any *ProcessedResponse that isn't a leaf
 func collectLeaf(leaf interface{}, mode string, path string, lookup map[string]string) (*ProcessedResponse, error) {
 	output := newResponse()
 
@@ -188,7 +185,7 @@ func collectLeaf(leaf interface{}, mode string, path string, lookup map[string]s
 	return nil, fmt.Errorf("could not collect leaf")
 }
 
-// merges all leaves/branches at a given node
+//merges all leaves/branches at a given node
 func mergeAll(itemsToMerge []*ProcessedResponse) []*ProcessedResponse {
 	leaves := []*ProcessedResponse{}
 	branches := []*ProcessedResponse{}
@@ -202,12 +199,12 @@ func mergeAll(itemsToMerge []*ProcessedResponse) []*ProcessedResponse {
 		}
 	}
 
-	//happens if all itemsToMerge are leaves
+	//mergeLeaves if all itemsToMerge are leaves
 	if len(branches) == 0 {
 		return mergeLeaves(leaves)
 	}
 
-	//happens
+	//mergeLeafIntoBranch if not all itemsToMerge are leaves
 	for _, branch := range branches {
 		for _, leaf := range leaves {
 			mergeLeafIntoBranch(leaf, branch)
@@ -217,7 +214,7 @@ func mergeAll(itemsToMerge []*ProcessedResponse) []*ProcessedResponse {
 	return branches
 }
 
-// used when a node only has leaves
+//used when a node only has leaves
 func mergeLeaves(leaves []*ProcessedResponse) []*ProcessedResponse {
 	mergedLeaves := newResponse()
 	for _, leaf := range leaves {
@@ -234,7 +231,7 @@ func mergeLeaves(leaves []*ProcessedResponse) []*ProcessedResponse {
 	return []*ProcessedResponse{mergedLeaves}
 }
 
-// used when a node has branches and leaves
+//used when a node has branches and leaves
 func mergeLeafIntoBranch(leaf *ProcessedResponse, branch *ProcessedResponse) *ProcessedResponse {
 	newBranch := branch
 	success, err := mergeFields(leaf, newBranch)

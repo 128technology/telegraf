@@ -18,11 +18,11 @@ import (
 )
 
 const (
-	// DefaultRequestTimeout is the request timeout if none is configured
+	//DefaultRequestTimeout is the request timeout if none is configured
 	DefaultRequestTimeout = time.Second * 5
 )
 
-// T128GraphQL is an input for metrics of a 128T router instance
+//T128GraphQL is an input for metrics of a 128T router instance
 type T128GraphQL struct {
 	CollectorName string            `toml:"collector_name"`
 	BaseURL       string            `toml:"base_url"`
@@ -38,19 +38,18 @@ type T128GraphQL struct {
 	client      *http.Client
 }
 
-// SampleConfig returns the default configuration of the Input
+//SampleConfig returns the default configuration of the Input
 func (*T128GraphQL) SampleConfig() string {
 	return sampleConfig
 }
 
-// Description returns a one-sentence description on the Input
+//Description returns a one-sentence description on the Input
 func (*T128GraphQL) Description() string {
 	return "Make a 128T GraphQL query and return the data"
 }
 
-// Init sets up the input to be ready for action
+//Init sets up the input to be ready for action
 func (plugin *T128GraphQL) Init() error {
-
 	//check and load config
 	err := plugin.checkConfig()
 	if err != nil {
@@ -117,7 +116,7 @@ func (plugin *T128GraphQL) checkConfig() error {
 	return nil
 }
 
-// Gather takes in an accumulator and adds the metrics that the Input gathers
+//Gather takes in an accumulator and adds the metrics that the Input gathers
 func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 	request, err := plugin.createRequest()
 	if err != nil {
@@ -162,7 +161,14 @@ func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 		return nil
 	}
 
-	processedResponses, err := ProcessResponse(jsonParsed, plugin.Config.Fields, plugin.Config.Tags)
+	//look for empty response
+	dataExists := jsonParsed.Exists("data")
+	if !dataExists {
+		acc.AddError(fmt.Errorf("empty response for collector %s: %s", plugin.CollectorName, jsonParsed.String()))
+		return nil
+	}
+
+	processedResponses, err := ProcessResponse(jsonParsed, plugin.CollectorName, plugin.Config.Fields, plugin.Config.Tags)
 	if err != nil {
 		acc.AddError(err)
 		return nil
