@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"net"
 	"net/http"
-	"reflect"
 	"strings"
 	"time"
 
@@ -19,11 +18,11 @@ import (
 )
 
 const (
-	// DefaultRequestTimeout is the request timeout if none is configured
+	//DefaultRequestTimeout is the request timeout if none is configured
 	DefaultRequestTimeout = time.Second * 5
 )
 
-// T128GraphQL is an input for metrics of a 128T router instance
+//T128GraphQL is an input for metrics of a 128T router instance
 type T128GraphQL struct {
 	CollectorName string            `toml:"collector_name"`
 	BaseURL       string            `toml:"base_url"`
@@ -33,34 +32,33 @@ type T128GraphQL struct {
 	Tags          map[string]string `toml:"extract_tags"`
 	Timeout       internal.Duration `toml:"timeout"`
 
-	Query          string
-	JSONEntryPoint string
-	requestBody    []byte
-	client         *http.Client
+	Config      *Config
+	Query       string
+	requestBody []byte
+	client      *http.Client
 }
 
-// SampleConfig returns the default configuration of the Input
+//SampleConfig returns the default configuration of the Input
 func (*T128GraphQL) SampleConfig() string {
 	return sampleConfig
 }
 
-// Description returns a one-sentence description on the Input
+//Description returns a one-sentence description on the Input
 func (*T128GraphQL) Description() string {
 	return "Make a 128T GraphQL query and return the data"
 }
 
-// Init sets up the input to be ready for action
+//Init sets up the input to be ready for action
 func (plugin *T128GraphQL) Init() error {
-
-	//check config
+	//check and load config
 	err := plugin.checkConfig()
 	if err != nil {
 		return err
 	}
+	plugin.Config = LoadConfig(plugin.EntryPoint, plugin.Fields, plugin.Tags)
 
 	//build query, json path to data and request body
-	plugin.Query = BuildQuery(plugin.EntryPoint, plugin.Fields, plugin.Tags)
-	plugin.JSONEntryPoint = ParseEntryPoint(plugin.EntryPoint).ResponsePath
+	plugin.Query = BuildQuery(plugin.Config)
 
 	content := struct {
 		Query string `json:"query,omitempty"`
@@ -118,7 +116,7 @@ func (plugin *T128GraphQL) checkConfig() error {
 	return nil
 }
 
-// Gather takes in an accumulator and adds the metrics that the Input gathers
+//Gather takes in an accumulator and adds the metrics that the Input gathers
 func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 	request, err := plugin.createRequest()
 	if err != nil {
@@ -153,24 +151,24 @@ func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 		return nil
 	}
 
-	//TODO: move all of this into ProcessResponse() - MON-315
-	jsonObj, err := jsonParsed.JSONPointer(plugin.JSONEntryPoint)
-	if err != nil {
-		template := "unexpected response for collector " + plugin.CollectorName + ": %s"
+	//look for other errors in response
+	exists := jsonParsed.Exists("errors")
+	if exists {
+		template := fmt.Sprintf("unexpected response for collector %s", plugin.CollectorName) + ": %s"
 		for _, err := range decodeAndReportJSONErrors(message, template) {
 			acc.AddError(err)
 		}
 		return nil
 	}
 
-	//update acc
-	jsonChildren, err := jsonObj.Children()
-	if err != nil {
-		acc.AddError(fmt.Errorf("failed to iterate on response nodes for collector %s: %w", plugin.CollectorName, err))
+	//look for empty response
+	dataExists := jsonParsed.Exists("data")
+	if !dataExists {
+		acc.AddError(fmt.Errorf("empty response for collector %s: %s", plugin.CollectorName, jsonParsed.String()))
 		return nil
 	}
 
-	processedResponses, err := ProcessResponse(jsonChildren, plugin.CollectorName, plugin.Fields, plugin.Tags)
+	processedResponses, err := ProcessResponse(jsonParsed, plugin.CollectorName, plugin.Config.Fields, plugin.Config.Tags)
 	if err != nil {
 		acc.AddError(err)
 		return nil
@@ -219,22 +217,11 @@ func decodeAndReportJSONErrors(response []byte, template string) []error {
 	}
 
 	for _, child := range jsonChildren {
-		//TODO: safely type-asert - MON-315
 		errorNode := child.Data().(map[string]interface{})
-		errors = append(errors, fmt.Errorf(template, errorNode["message"].(string)))
+		message := fmt.Sprintf("%v", errorNode["message"])
+		errors = append(errors, fmt.Errorf(template, message))
 	}
 	return errors
-}
-
-func isNil(i interface{}) bool {
-	if i == nil {
-		return true
-	}
-	switch reflect.TypeOf(i).Kind() {
-	case reflect.Ptr, reflect.Map, reflect.Array, reflect.Chan, reflect.Slice:
-		return reflect.ValueOf(i).IsNil()
-	}
-	return false
 }
 
 func init() {

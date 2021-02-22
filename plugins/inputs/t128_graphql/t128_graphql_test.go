@@ -31,7 +31,6 @@ const (
 	InvalidFieldQuery             = "query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ninvalid-field\ntest-tag}}}}}}}"
 )
 
-//TODO: more unit tests - MON-314
 var CollectorTestCases = []struct {
 	Name            string
 	EntryPoint      string
@@ -54,19 +53,19 @@ var CollectorTestCases = []struct {
 	},
 	{
 		Name:            "empty response produces error",
-		EntryPoint:      "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
+		EntryPoint:      "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
 		Fields:          map[string]string{"test-field": "test-field"},
 		Tags:            map[string]string{"test-tag": "test-tag"},
 		Query:           ValidQuerySingleTag,
 		Endpoint:        Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestSingleTag, "{}"},
 		ExpectedMetrics: nil,
 		ExpectedErrors: []string{
-			"unexpected response for collector test-collector: {}",
+			"empty response for collector test-collector: {}",
 		},
 	},
 	{
 		Name:            "propogates not found error to accumulator",
-		EntryPoint:      "allRouters[name:not-a-router]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
+		EntryPoint:      "allRouters(name:'not-a-router')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
 		Fields:          map[string]string{"test-field": "test-field"},
 		Tags:            map[string]string{"test-tag": "test-tag"},
 		Query:           InvalidRouterQuery,
@@ -78,7 +77,7 @@ var CollectorTestCases = []struct {
 	},
 	{
 		Name:            "propogates invalid json error to accumulator",
-		EntryPoint:      "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
+		EntryPoint:      "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
 		Fields:          map[string]string{"test-field": "test-field"},
 		Tags:            map[string]string{"test-tag": "test-tag"},
 		Query:           ValidQuerySingleTag,
@@ -88,7 +87,7 @@ var CollectorTestCases = []struct {
 	},
 	{
 		Name:       "propogates graphQL error to accumulator",
-		EntryPoint: "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
+		EntryPoint: "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
 		Fields:     map[string]string{"invalid-field": "invalid-field"},
 		Tags:       map[string]string{"test-tag": "test-tag"},
 		Query:      InvalidFieldQuery,
@@ -107,8 +106,8 @@ var CollectorTestCases = []struct {
 		ExpectedErrors:  []string{"unexpected response for collector test-collector: Cannot query field \"invalid-field\" on type \"ArpEntryType\"."},
 	},
 	{
-		Name:       "processes response with single tag and field", //more cases units are tested separately
-		EntryPoint: "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
+		Name:       "processes simple response", //more cases units are tested separately
+		EntryPoint: "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
 		Fields:     map[string]string{"test-field": "test-field"},
 		Tags:       map[string]string{"test-tag": "test-tag"},
 		Query:      ValidQuerySingleTag,

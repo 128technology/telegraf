@@ -18,7 +18,7 @@ const (
 BuildQuery first creates an intermediary query object that is traversed by buildQueryBody() in pre-order
 
 Args:
-	entryPoint example - "allRouters[name:ComboEast]/nodes/nodes[name:combo-east]/nodes/arp/nodes"
+	entryPoint example - "allRouters(name:'ComboEast')/nodes/nodes(name:'combo-east')/nodes/arp/nodes"
 	fields example - map[string]string{"enabled": "enabled"}
 	tags example - map[string]string{
 			"name": "name",
@@ -30,10 +30,10 @@ Example:
 
 	{
 		"allRouters": {
-			"$name":"ComboEast",
+			"$predicate": "(name:\"ComboEast\")",
 			"nodes": {
 				"nodes": {
-					"$name":"combo-east",
+					"$predicate":"(name:\"combo-east\")",
 					"nodes": {
 						"arp": {
 							"nodes": {
@@ -65,12 +65,12 @@ Example:
 	state{
 	adminStatus}}}}}}}}
 */
-func BuildQuery(entryPoint string, fields map[string]string, tags map[string]string) string {
+func BuildQuery(config *Config) string {
 	query := "query "
 
 	var buf bytes.Buffer
 	w := io.Writer(&buf)
-	jsonObj := buildQueryObject(entryPoint, fields, tags)
+	jsonObj := buildQueryObject(config)
 	buildQueryBody(jsonObj, w)
 
 	query += buf.String()
@@ -78,36 +78,19 @@ func BuildQuery(entryPoint string, fields map[string]string, tags map[string]str
 }
 
 //buildQueryBody creates an intermediary query object that is traversed by buildQueryBody
-func buildQueryObject(entryPoint string, fields map[string]string, tags map[string]string) *gabs.Container {
+func buildQueryObject(config *Config) *gabs.Container {
 	jsonObj := gabs.New()
 
-	parsedEntryPoint := ParseEntryPoint(entryPoint)
-
-	addToQueryObj(jsonObj, parsedEntryPoint.Predicates, true, false, "")
-	addToQueryObj(jsonObj, fields, false, true, parsedEntryPoint.QueryPath)
-	addToQueryObj(jsonObj, tags, false, true, parsedEntryPoint.QueryPath)
+	addToQueryObj(jsonObj, config.Predicates)
+	addToQueryObj(jsonObj, config.Fields)
+	addToQueryObj(jsonObj, config.Tags)
 
 	return jsonObj
 }
 
-func addToQueryObj(jsonObj *gabs.Container, items map[string]string, keyIsPath bool, usesSlash bool, basePath string) {
-	var replacer = strings.NewReplacer("/", ".")
-	dictSwap := func(key string, value string) (string, string) {
-		if keyIsPath {
-			return value, key
-		}
-		return key, value
-	}
-
+func addToQueryObj(jsonObj *gabs.Container, items map[string]string) {
 	for key, value := range items {
-		key, value = dictSwap(key, value)
-		//TODO: preprocess to remove usesSlash - MON-315
-		if usesSlash {
-			partialPath := replacer.Replace(value)
-			jsonObj.SetP(key, basePath+partialPath)
-		} else {
-			jsonObj.SetP(key, basePath+value)
-		}
+		jsonObj.SetP(value, key[6:]) //".data." is added during config step for ProcessResponse but stripped here
 	}
 }
 
@@ -130,10 +113,9 @@ func buildQueryBody(jsonObj *gabs.Container, w io.Writer) {
 
 	children := 0
 	for i, key := range keys {
-		//TODO: safely type-asert - MON-315
 		//add predicates like (name:"ComboEast") to the query
 		if strings.HasPrefix(key, predicateTag) {
-			writePredicate(w, fmt.Sprintf("(%s:\"%s\"){", key[1:], jsonChildren[key].Data().(string)))
+			writePredicate(w, fmt.Sprintf("%v", jsonChildren[key].Data())+"{")
 			continue
 		}
 		children++

@@ -9,38 +9,53 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//TODO: more unit tests - MON-314
+const (
+	complexResponseBasePath = ".data.allRouters.nodes.peers.nodes"
+)
+
 var ResponseProcessingTestCases = []struct {
 	Name           string
 	Fields         map[string]string
 	Tags           map[string]string
-	JsonInput      []*gabs.Container
+	JsonInput      *gabs.Container
 	ExpectedOutput []*plugin.ProcessedResponse
 	ExpectedError  error
 }{
 	{
-		Name:   "none value produces error",
-		Fields: map[string]string{"test-field": "test-field"},
-		Tags:   map[string]string{"test-tag": "test-tag"},
-		JsonInput: []*gabs.Container{
-			generateJsonTestData([]byte(`{
+		Name:   "no data produces error",
+		Fields: map[string]string{"/data/test-field": "test-field"},
+		Tags:   map[string]string{"/data/test-tag": "test-tag"},
+		JsonInput: generateJsonTestData([]byte(`{"data": {
 				"test-field": null,
-				"test-tag": "test-string"
-			}`)),
-		},
-		ExpectedOutput: []*plugin.ProcessedResponse{},
-		ExpectedError:  fmt.Errorf("found empty data for collector test-collector: field test-field"),
+				"test-tag": null
+			}}`)),
+		ExpectedOutput: nil,
+		ExpectedError:  fmt.Errorf("no data collected for collector test-collector"),
 	},
 	{
-		Name:   "converts tag to string if numeric",
-		Fields: map[string]string{"test-field": "test-field"},
-		Tags:   map[string]string{"test-tag": "test-tag"},
-		JsonInput: []*gabs.Container{
-			generateJsonTestData([]byte(`{
+		Name:   "none value is dropped",
+		Fields: map[string]string{".data.test-field": "test-field"},
+		Tags:   map[string]string{".data.test-tag": "test-tag"},
+		JsonInput: generateJsonTestData([]byte(`{"data": {
+				"test-field": null,
+				"test-tag": "test-string"
+			}}`)),
+		ExpectedOutput: []*plugin.ProcessedResponse{
+			&plugin.ProcessedResponse{
+				Fields: map[string]interface{}{},
+				Tags:   map[string]string{"test-tag": "test-string"},
+			},
+		},
+		ExpectedError: nil,
+	},
+	{
+		Name:   "process response with number tag",
+		Fields: map[string]string{".data.test-field": "test-field"},
+		Tags:   map[string]string{".data.test-tag": "test-tag"},
+		JsonInput: generateJsonTestData([]byte(`{"data": {
 				"test-field": 128,
 				"test-tag": 128
-			}`)),
-		},
+			}}`)),
 		ExpectedOutput: []*plugin.ProcessedResponse{
 			&plugin.ProcessedResponse{
 				Fields: map[string]interface{}{"test-field": 128.0},
@@ -50,16 +65,14 @@ var ResponseProcessingTestCases = []struct {
 		ExpectedError: nil,
 	},
 	{
-		Name:   "uses multiple fields",
-		Fields: map[string]string{"test-field-1": "test-field-1", "test-field-2": "test-field-2"},
-		Tags:   map[string]string{"test-tag": "test-tag"},
-		JsonInput: []*gabs.Container{
-			generateJsonTestData([]byte(`{
+		Name:   "process response with multiple fields",
+		Fields: map[string]string{".data.test-field-1": "test-field-1", ".data.test-field-2": "test-field-2"},
+		Tags:   map[string]string{".data.test-tag": "test-tag"},
+		JsonInput: generateJsonTestData([]byte(`{"data": {
 				"test-field-1": 128,
 				"test-field-2": 95,
 				"test-tag": "test-string"
-	  		}`)),
-		},
+	  		}}`)),
 		ExpectedOutput: []*plugin.ProcessedResponse{
 			&plugin.ProcessedResponse{
 				Fields: map[string]interface{}{"test-field-1": 128.0, "test-field-2": 95.0},
@@ -69,16 +82,14 @@ var ResponseProcessingTestCases = []struct {
 		ExpectedError: nil,
 	},
 	{
-		Name:   "uses multiple tags",
-		Fields: map[string]string{"test-field": "test-field"},
-		Tags:   map[string]string{"test-tag-1": "test-tag-1", "test-tag-2": "test-tag-2"},
-		JsonInput: []*gabs.Container{
-			generateJsonTestData([]byte(`{
+		Name:   "process response with multiple tags",
+		Fields: map[string]string{".data.test-field": "test-field"},
+		Tags:   map[string]string{".data.test-tag-1": "test-tag-1", ".data.test-tag-2": "test-tag-2"},
+		JsonInput: generateJsonTestData([]byte(`{"data": {
 				"test-field": 128,
 		  		"test-tag-1": "test-string-1",
 		  		"test-tag-2": "test-string-2"
-	  		}`)),
-		},
+	  		}}`)),
 		ExpectedOutput: []*plugin.ProcessedResponse{
 			&plugin.ProcessedResponse{
 				Fields: map[string]interface{}{"test-field": 128.0},
@@ -88,34 +99,30 @@ var ResponseProcessingTestCases = []struct {
 		ExpectedError: nil,
 	},
 	{
-		Name:   "uses multiple tags with some none value",
-		Fields: map[string]string{"test-field": "test-field"},
-		Tags:   map[string]string{"test-tag-1": "test-tag-1", "test-tag-2": "test-tag-2"},
-		JsonInput: []*gabs.Container{
-			generateJsonTestData([]byte(`{
+		Name:   "process response with multiple tags some none value",
+		Fields: map[string]string{".data.test-field": "test-field"},
+		Tags:   map[string]string{".data.test-tag-1": "test-tag-1", ".data.test-tag-2": "test-tag-2"},
+		JsonInput: generateJsonTestData([]byte(`{"data": {
 				"test-field": 128,
 		  		"test-tag-1": "test-string-1",
 		  		"test-tag-2": null
-	  		}`)),
-		},
+	  		}}`)),
 		ExpectedOutput: []*plugin.ProcessedResponse{
 			&plugin.ProcessedResponse{
 				Fields: map[string]interface{}{"test-field": 128.0},
-				Tags:   map[string]string{"test-tag-1": "test-string-1", "test-tag-2": ""},
+				Tags:   map[string]string{"test-tag-1": "test-string-1"},
 			},
 		},
 		ExpectedError: nil,
 	},
 	{
 		Name:   "renames tags and fields",
-		Fields: map[string]string{"test-field-renamed": "test-field"},
-		Tags:   map[string]string{"test-tag-renamed": "test-tag"},
-		JsonInput: []*gabs.Container{
-			generateJsonTestData([]byte(`{
+		Fields: map[string]string{".data.test-field": "test-field-renamed"},
+		Tags:   map[string]string{".data.test-tag": "test-tag-renamed"},
+		JsonInput: generateJsonTestData([]byte(`{"data": {
 				"test-field": 128,
 				"test-tag": 128
-			}`)),
-		},
+			}}`)),
 		ExpectedOutput: []*plugin.ProcessedResponse{
 			&plugin.ProcessedResponse{
 				Fields: map[string]interface{}{"test-field-renamed": 128.0},
@@ -126,18 +133,17 @@ var ResponseProcessingTestCases = []struct {
 	},
 	{
 		Name:   "process response with multiple nodes",
-		Fields: map[string]string{"test-field": "test-field"},
-		Tags:   map[string]string{"test-tag": "test-tag"},
-		JsonInput: []*gabs.Container{
-			generateJsonTestData([]byte(`{
+		Fields: map[string]string{".data.test-field": "test-field"},
+		Tags:   map[string]string{".data.test-tag": "test-tag"},
+		JsonInput: generateJsonTestData([]byte(`{"data": [
+			{
 				"test-field": 128,
 				"test-tag": "test-string-1"
-			}`)),
-			generateJsonTestData([]byte(`{
+			},
+			{
 				"test-field": 95,
 				"test-tag": "test-string-2"
-			}`)),
-		},
+			}]}`)),
 		ExpectedOutput: []*plugin.ProcessedResponse{
 			&plugin.ProcessedResponse{
 				Fields: map[string]interface{}{"test-field": 128.0},
@@ -152,24 +158,24 @@ var ResponseProcessingTestCases = []struct {
 	},
 	{
 		Name:   "process response with nested tags",
-		Fields: map[string]string{"test-field": "test-field"},
-		Tags:   map[string]string{"test-tag-1": "test-tag-1", "test-tag-2": "state/test-tag-2"},
-		JsonInput: []*gabs.Container{
-			generateJsonTestData([]byte(`{
+		Fields: map[string]string{".data.test-field": "test-field"},
+		Tags:   map[string]string{".data.test-tag-1": "test-tag-1", ".data.state.test-tag-2": "test-tag-2"},
+		JsonInput: generateJsonTestData([]byte(`{"data": [
+			{
 				"test-field": 128,
 				"test-tag-1": "test-string-1",
 			  	"state": {
 				  "test-tag-2": "test-string-2"
 			  	}
-		  	}`)),
-			generateJsonTestData([]byte(`{
+			},
+			{
 				"test-field": 95,
 				"test-tag-1": "test-string-3",
 				"state": {
 					"test-tag-2": "test-string-4"
 				}
-			}`)),
-		},
+			}
+		]}`)),
 		ExpectedOutput: []*plugin.ProcessedResponse{
 			&plugin.ProcessedResponse{
 				Fields: map[string]interface{}{"test-field": 128.0},
@@ -184,10 +190,9 @@ var ResponseProcessingTestCases = []struct {
 	},
 	{
 		Name:   "process response with multi-level nested tags",
-		Fields: map[string]string{"test-field": "test-field"},
-		Tags:   map[string]string{"test-tag-1": "test-tag-1", "test-tag-2": "state1/state2/state3/test-tag-2"},
-		JsonInput: []*gabs.Container{
-			generateJsonTestData([]byte(`{
+		Fields: map[string]string{".data.test-field": "test-field"},
+		Tags:   map[string]string{".data.test-tag-1": "test-tag-1", ".data.state1.state2.state3.test-tag-2": "test-tag-2"},
+		JsonInput: generateJsonTestData([]byte(`{"data": {
 				"test-field": 128,
 				"test-tag-1": "test-string-1",
 			  	"state1": {
@@ -197,8 +202,7 @@ var ResponseProcessingTestCases = []struct {
 						}
 					}
 			  	}
-		  	}`)),
-		},
+		  	}}`)),
 		ExpectedOutput: []*plugin.ProcessedResponse{
 			&plugin.ProcessedResponse{
 				Fields: map[string]interface{}{"test-field": 128.0},
@@ -209,10 +213,9 @@ var ResponseProcessingTestCases = []struct {
 	},
 	{
 		Name:   "process response with multi-level nested fields",
-		Fields: map[string]string{"test-field-1": "state1/state2/state3/test-field-1", "test-field-2": "test-field-2"},
-		Tags:   map[string]string{"test-tag": "test-tag"},
-		JsonInput: []*gabs.Container{
-			generateJsonTestData([]byte(`{
+		Fields: map[string]string{".data.state1.state2.state3.test-field-1": "test-field-1", ".data.test-field-2": "test-field-2"},
+		Tags:   map[string]string{".data.test-tag": "test-tag"},
+		JsonInput: generateJsonTestData([]byte(`{"data": {
 				"test-field-2": 128,
 				"test-tag": "test-string-1",
 			  	"state1": {
@@ -222,8 +225,7 @@ var ResponseProcessingTestCases = []struct {
 						}
 					}
 			  	}
-		  	}`)),
-		},
+		  	}}`)),
 		ExpectedOutput: []*plugin.ProcessedResponse{
 			&plugin.ProcessedResponse{
 				Fields: map[string]interface{}{"test-field-1": 95.0, "test-field-2": 128.0},
@@ -234,10 +236,9 @@ var ResponseProcessingTestCases = []struct {
 	},
 	{
 		Name:   "process response with mixed nesting",
-		Fields: map[string]string{"test-field": "state1/state2/test-field"},
-		Tags:   map[string]string{"test-tag-1": "test-tag-1", "test-tag-2": "state1/state2/state3/test-tag-2"},
-		JsonInput: []*gabs.Container{
-			generateJsonTestData([]byte(`{
+		Fields: map[string]string{".data.state1.state2.test-field": "test-field"},
+		Tags:   map[string]string{".data.test-tag-1": "test-tag-1", ".data.state1.state2.state3.test-tag-2": "test-tag-2"},
+		JsonInput: generateJsonTestData([]byte(`{"data": {
 				"test-tag-1": "test-string-1",
 			  	"state1": {
 					"state2": {
@@ -247,12 +248,98 @@ var ResponseProcessingTestCases = []struct {
 						}
 					}
 			  	}
-		  	}`)),
-		},
+		  	}}`)),
 		ExpectedOutput: []*plugin.ProcessedResponse{
 			&plugin.ProcessedResponse{
 				Fields: map[string]interface{}{"test-field": 128.0},
 				Tags:   map[string]string{"test-tag-1": "test-string-1", "test-tag-2": "test-string-2"},
+			},
+		},
+		ExpectedError: nil,
+	},
+	{
+		Name: "process complex response",
+		Fields: map[string]string{
+			complexResponseBasePath + ".paths.adjacentAddress":  "adjacent-address",
+			complexResponseBasePath + ".paths.adjacentHostname": "adjacent-hostname",
+			complexResponseBasePath + ".paths.isActive":         "is-active",
+			complexResponseBasePath + ".paths.uptime":           "uptime",
+		},
+		Tags: map[string]string{
+			complexResponseBasePath + ".name":                  "peer-name",
+			complexResponseBasePath + ".paths.deviceInterface": "device-interface",
+			complexResponseBasePath + ".paths.vlan":            "vlan",
+		},
+		JsonInput: generateJsonTestData([]byte(`{"data": {
+			  "allRouters": {
+				"nodes": [
+				  {
+					"peers": {
+					  "nodes": [
+						{
+						  "name": "AZDCBBP1",
+						  "paths": [
+							{
+							  "vlan": 0,
+							  "uptime": 188333176,
+							  "adjacentAddress": "12.51.52.30",
+							  "adjacentHostname": null,
+							  "deviceInterface": "StoreLTE",
+							  "isActive": true
+							},
+							{
+							  "vlan": 0,
+							  "uptime": 82247253,
+							  "adjacentAddress": "12.51.52.30",
+							  "adjacentHostname": null,
+							  "deviceInterface": "StoreWAN",
+							  "isActive": true
+							}
+						  ]
+						},
+						{
+						  "name": "AZDCLTEP1",
+						  "paths": [
+							{
+							  "vlan": 0,
+							  "uptime": 162241794,
+							  "adjacentAddress": "12.51.52.22",
+							  "adjacentHostname": null,
+							  "deviceInterface": "StoreLTE",
+							  "isActive": true
+							},
+							{
+							  "vlan": 0,
+							  "uptime": 82247352,
+							  "adjacentAddress": "12.51.52.22",
+							  "adjacentHostname": null,
+							  "deviceInterface": "StoreWAN",
+							  "isActive": true
+							}
+						  ]
+						}
+					  ]
+					}
+				  }
+				]
+			  }
+		}}`)),
+		ExpectedOutput: []*plugin.ProcessedResponse{
+			&plugin.ProcessedResponse{
+				Fields: map[string]interface{}{"adjacent-address": "12.51.52.30", "is-active": true, "uptime": 188333176.0},
+				Tags:   map[string]string{"peer-name": "AZDCBBP1", "device-interface": "StoreLTE", "vlan": "0"},
+			},
+			&plugin.ProcessedResponse{
+				Fields: map[string]interface{}{"adjacent-address": "12.51.52.30", "is-active": true, "uptime": 82247253.0},
+				Tags:   map[string]string{"peer-name": "AZDCBBP1", "device-interface": "StoreWAN", "vlan": "0"},
+			},
+			&plugin.ProcessedResponse{
+				Fields: map[string]interface{}{"adjacent-address": "12.51.52.22", "is-active": true, "uptime": 162241794.0},
+				Tags:   map[string]string{"peer-name": "AZDCLTEP1", "device-interface": "StoreLTE", "vlan": "0"},
+			},
+			&plugin.ProcessedResponse{
+				Fields: map[string]interface{}{"adjacent-address": "12.51.52.22", "is-active": true, "uptime": 82247352.0},
+				Tags:   map[string]string{"peer-name": "AZDCLTEP1", "device-interface": "StoreWAN", "vlan": "0"},
 			},
 		},
 		ExpectedError: nil,

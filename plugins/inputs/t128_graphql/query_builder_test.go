@@ -14,47 +14,76 @@ const (
 	ValidQueryNestedTag   = "query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\nstate{\ntest-tag-2}\ntest-field\ntest-tag-1}}}}}}}"
 )
 
-//TODO: more unit tests - MON-314
 var QueryFormationTestCases = []struct {
 	Name          string
-	EntryPoint    string
-	Fields        map[string]string
-	Tags          map[string]string
+	ConfigIn      *plugin.Config
 	ExpectedQuery string
 }{
 	{
-		Name:          "convert simple query single tag",
-		EntryPoint:    "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
-		Fields:        map[string]string{"test-field": "test-field"},
-		Tags:          map[string]string{"test-tag": "test-tag"},
+		Name:          "build simple query single tag",
+		ConfigIn:      getTestConfigWithPredicates("(name:\"ComboEast\")", "(name:\"east-combo\")"),
 		ExpectedQuery: ValidQuerySingleTag,
 	},
 	{
-		Name:          "convert simple query double tag",
-		EntryPoint:    "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
-		Fields:        map[string]string{"test-field": "test-field"},
-		Tags:          map[string]string{"test-tag-1": "test-tag-1", "test-tag-2": "test-tag-2"},
+		Name: "build simple query double tag",
+		ConfigIn: &plugin.Config{
+			Predicates: map[string]string{
+				".data.allRouters.$predicate":             "(name:\"ComboEast\")",
+				".data.allRouters.nodes.nodes.$predicate": "(name:\"east-combo\")",
+			},
+			Fields: map[string]string{".data.allRouters.nodes.nodes.nodes.arp.nodes.test-field": "test-field"},
+			Tags: map[string]string{
+				".data.allRouters.nodes.nodes.nodes.arp.nodes.test-tag-1": "test-tag-1",
+				".data.allRouters.nodes.nodes.nodes.arp.nodes.test-tag-2": "test-tag-2",
+			},
+		},
 		ExpectedQuery: ValidQueryDoubleTag,
 	},
 	{
-		Name:          "convert simple query double field",
-		EntryPoint:    "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
-		Fields:        map[string]string{"test-field-1": "test-field-1", "test-field-2": "test-field-2"},
-		Tags:          map[string]string{"test-tag": "test-tag"},
+		Name: "build simple query double field",
+		ConfigIn: &plugin.Config{
+			Predicates: map[string]string{
+				".data.allRouters.$predicate":             "(name:\"ComboEast\")",
+				".data.allRouters.nodes.nodes.$predicate": "(name:\"east-combo\")",
+			},
+			Fields: map[string]string{
+				".data.allRouters.nodes.nodes.nodes.arp.nodes.test-field-1": "test-field-1",
+				".data.allRouters.nodes.nodes.nodes.arp.nodes.test-field-2": "test-field-2",
+			},
+			Tags: map[string]string{
+				".data.allRouters.nodes.nodes.nodes.arp.nodes.test-tag": "test-tag",
+			},
+		},
 		ExpectedQuery: ValidQueryDoubleField,
 	},
 	{
-		Name:          "convert query nested tag",
-		EntryPoint:    "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
-		Fields:        map[string]string{"test-field": "test-field"},
-		Tags:          map[string]string{"test-tag-1": "test-tag-1", "test-tag-2": "state/test-tag-2"},
+		Name: "build query nested tag",
+		ConfigIn: &plugin.Config{
+			Predicates: map[string]string{
+				".data.allRouters.$predicate":             "(name:\"ComboEast\")",
+				".data.allRouters.nodes.nodes.$predicate": "(name:\"east-combo\")",
+			},
+			Fields: map[string]string{".data.allRouters.nodes.nodes.nodes.arp.nodes.test-field": "test-field"},
+			Tags: map[string]string{
+				".data.allRouters.nodes.nodes.nodes.arp.nodes.test-tag-1":       "test-tag-1",
+				".data.allRouters.nodes.nodes.nodes.arp.nodes.state.test-tag-2": "test-tag-2",
+			},
+		},
 		ExpectedQuery: ValidQueryNestedTag,
 	},
 	{
-		Name:       "convert query multi-level-nested tag",
-		EntryPoint: "allRouters[name:ComboEast]/nodes/nodes[name:east-combo]/nodes/arp/nodes",
-		Fields:     map[string]string{"test-field": "test-field"},
-		Tags:       map[string]string{"test-tag-1": "test-tag-1", "test-tag-2": "state1/state2/state3/test-tag-2"},
+		Name: "build query multi-level-nested tag",
+		ConfigIn: &plugin.Config{
+			Predicates: map[string]string{
+				".data.allRouters.$predicate":             "(name:\"ComboEast\")",
+				".data.allRouters.nodes.nodes.$predicate": "(name:\"east-combo\")",
+			},
+			Fields: map[string]string{".data.allRouters.nodes.nodes.nodes.arp.nodes.test-field": "test-field"},
+			Tags: map[string]string{
+				".data.allRouters.nodes.nodes.nodes.arp.nodes.state1.test-tag-1":               "test-tag-1",
+				".data.allRouters.nodes.nodes.nodes.arp.nodes.state1.state2.state3.test-tag-2": "test-tag-2",
+			},
+		},
 		ExpectedQuery: strings.ReplaceAll(`query {
 			allRouters(name:"ComboEast"){
 			nodes{
@@ -65,16 +94,97 @@ var QueryFormationTestCases = []struct {
 			state1{
 			state2{
 			state3{
-			test-tag-2}}}
-			test-field
-			test-tag-1}}}}}}}`, "\t", ""),
+			test-tag-2}}
+			test-tag-1}
+			test-field}}}}}}}`, "\t", ""),
+	},
+	{
+		Name: "build query list predicate",
+		ConfigIn: &plugin.Config{
+			Predicates: map[string]string{
+				".data.allRouters.$predicate":             "(names:[\"wan\",\"lan\"])",
+				".data.allRouters.nodes.nodes.$predicate": "(name:\"east-combo\")",
+			},
+			Fields: map[string]string{".data.allRouters.nodes.nodes.nodes.arp.nodes.test-field": "test-field"},
+			Tags: map[string]string{
+				".data.allRouters.nodes.nodes.nodes.arp.nodes.state1.test-tag-1":               "test-tag-1",
+				".data.allRouters.nodes.nodes.nodes.arp.nodes.state1.state2.state3.test-tag-2": "test-tag-2",
+			},
+		},
+		ExpectedQuery: strings.ReplaceAll(`query {
+			allRouters(names:["wan","lan"]){
+			nodes{
+			nodes(name:"east-combo"){
+			nodes{
+			arp{
+			nodes{
+			state1{
+			state2{
+			state3{
+			test-tag-2}}
+			test-tag-1}
+			test-field}}}}}}}`, "\t", ""),
+	},
+	{
+		Name: "build query multi-value predicates",
+		ConfigIn: &plugin.Config{
+			Predicates: map[string]string{
+				".data.allRouters.$predicate":             "(names:[\"wan\",\"lan\"],key2:\"value2\")",
+				".data.allRouters.nodes.nodes.$predicate": "(name:\"east-combo\")",
+			},
+			Fields: map[string]string{".data.allRouters.nodes.nodes.nodes.arp.nodes.test-field": "test-field"},
+			Tags: map[string]string{
+				".data.allRouters.nodes.nodes.nodes.arp.nodes.state1.test-tag-1":               "test-tag-1",
+				".data.allRouters.nodes.nodes.nodes.arp.nodes.state1.state2.state3.test-tag-2": "test-tag-2",
+			},
+		},
+		ExpectedQuery: strings.ReplaceAll(`query {
+			allRouters(names:["wan","lan"],key2:"value2"){
+			nodes{
+			nodes(name:"east-combo"){
+			nodes{
+			arp{
+			nodes{
+			state1{
+			state2{
+			state3{
+			test-tag-2}}
+			test-tag-1}
+			test-field}}}}}}}`, "\t", ""),
+	},
+	{
+		Name: "build complex",
+		ConfigIn: &plugin.Config{
+			Predicates: map[string]string{
+				".data.allRouters.$predicate":             "(names:[\"wan\",\"lan\"],key2:\"value2\")",
+				".data.allRouters.nodes.nodes.$predicate": "(names:[\"east-combo\",\"west-combo\"])",
+			},
+			Fields: map[string]string{".data.allRouters.nodes.nodes.nodes.arp.nodes.test-field": "test-field"},
+			Tags: map[string]string{
+				".data.allRouters.nodes.nodes.nodes.arp.nodes.state1.test-tag-1":               "test-tag-1",
+				".data.allRouters.nodes.nodes.nodes.arp.nodes.state1.state2.state3.test-tag-2": "test-tag-2",
+			},
+		},
+		ExpectedQuery: strings.ReplaceAll(`query {
+			allRouters(names:["wan","lan"],key2:"value2"){
+			nodes{
+			nodes(names:["east-combo","west-combo"]){
+			nodes{
+			arp{
+			nodes{
+			state1{
+			state2{
+			state3{
+			test-tag-2}}
+			test-tag-1}
+			test-field}}}}}}}`, "\t", ""),
 	},
 }
 
 func TestT128GraphqlQueryFormation(t *testing.T) {
 	for _, testCase := range QueryFormationTestCases {
 		t.Run(testCase.Name, func(t *testing.T) {
-			query := plugin.BuildQuery(testCase.EntryPoint, testCase.Fields, testCase.Tags)
+			query := plugin.BuildQuery(testCase.ConfigIn)
 			require.Equal(t, testCase.ExpectedQuery, query)
 		})
 	}
