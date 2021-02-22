@@ -278,23 +278,3 @@ func TestConfig_AzureMonitorNamespacePrefix(t *testing.T) {
 	assert.Equal(t, "", azureMonitor.NamespacePrefix)
 	assert.Equal(t, true, ok)
 }
-
-func TestConfig_AzureMonitorNamespacePrefix(t *testing.T) {
-	// #8256 Cannot use empty string as the namespace prefix
-	c := NewConfig()
-	defaultPrefixConfig := `[[outputs.azure_monitor]]`
-	err := c.LoadConfigData([]byte(defaultPrefixConfig))
-	assert.NoError(t, err)
-	azureMonitor, ok := c.Outputs[0].Output.(*azure_monitor.AzureMonitor)
-	assert.Equal(t, "Telegraf/", azureMonitor.NamespacePrefix)
-	assert.Equal(t, true, ok)
-
-	c = NewConfig()
-	customPrefixConfig := `[[outputs.azure_monitor]]
-	namespace_prefix = ""`
-	err = c.LoadConfigData([]byte(customPrefixConfig))
-	assert.NoError(t, err)
-	azureMonitor, ok = c.Outputs[0].Output.(*azure_monitor.AzureMonitor)
-	assert.Equal(t, "", azureMonitor.NamespacePrefix)
-	assert.Equal(t, true, ok)
-}
