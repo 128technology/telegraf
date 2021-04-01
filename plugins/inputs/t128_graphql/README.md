@@ -1,7 +1,11 @@
-package t128_graphql
+# 128T GraphQL Input Plugin
 
-var sampleConfig = `
-## Collect data from a 128T instance using graphQL.
+The graphql input plugin collects data from a 128T instance via graphQL.
+
+### Configuration
+
+```toml
+# Collect data from a 128T instance using graphQL.
 [[inputs.t128_graphql]]
 ## Required. A name for the collector which will be used as the measurement name of the produced data.
 # collector_name = "peer-paths"
@@ -31,4 +35,10 @@ var sampleConfig = `
 # [inputs.t128_graphql.extract_tags]
 #   peer-name = "name"
 #   device-interface = "paths/deviceInterface"
-`
+```
+
+### Example Output
+```
+peer-paths,device-interface=10,peer-name=fake1 is-active=true,status="DOWN" 1617285085000000000
+peer-paths,device-interface=11,peer-name=fake2 is-active=true,status="UP" 1617285085000000000
+```
