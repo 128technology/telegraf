@@ -18,8 +18,9 @@ The graphql input plugin collects data from a 128T instance via graphQL.
 # unix_socket = "/var/run/128technology/web-server.sock"
 
 ## Required. The path to a point in the graphQL tree from which extract_fields and extract_tags will
-## be specified. This path may contain (<key>:<value>) graphQL arguments such as (name:'ComboEast').
-# entry_point = "allRouters(name:'ComboEast')/nodes/peers/nodes"
+## be specified. This path may contain (<key>:<value>) graphQL arguments such as
+## (name:'RTR_EAST_COMBO').
+# entry_point = "allRouters(name:'RTR_EAST_COMBO')/nodes/peers/nodes"
 
 ## Amount of time allowed to complete a single HTTP request
 # timeout = "5s"
@@ -37,8 +38,67 @@ The graphql input plugin collects data from a 128T instance via graphQL.
 #   device-interface = "paths/deviceInterface"
 ```
 
-### Example Output
+### Example GraphQL Query
+For the configuration above, the plugin will build the following graphQL query:
+
 ```
-peer-paths,device-interface=10,peer-name=fake1 is-active=true,status="DOWN" 1617285085000000000
-peer-paths,device-interface=11,peer-name=fake2 is-active=true,status="UP" 1617285085000000000
+query {
+  allRouters(name: "RTR_EAST_COMBO") {
+    nodes {
+      peers {
+        nodes {
+          name
+          paths {
+            isActive
+            status
+            deviceInterface
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+### Example GraphQL Response
+For the query above, an example graphQL response is:
+
+```
+{
+  "data": {
+    "allRouters": {
+      "nodes": [
+        {
+          "peers": {
+            "nodes": [
+              {
+                "paths": [
+                  {
+                    "isActive": true,
+                    "status": "DOWN",
+                    "deviceInterface": "10"
+                  },
+                  {
+                    "isActive": true,
+                    "status": "UP",
+                    "deviceInterface": "11"
+                  }
+                ],
+                "name": "fake"
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+### Example Output
+For the response above, the collector outputs:
+
+```
+peer-paths,device-interface=10,peer-name=fake is-active=true,status="DOWN" 1617285085000000000
+peer-paths,device-interface=11,peer-name=fake is-active=true,status="UP" 1617285085000000000
 ```
