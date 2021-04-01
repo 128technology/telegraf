@@ -42,5 +42,4 @@ import (
 	_ "github.com/influxdata/telegraf/plugins/outputs/warp10"
 	_ "github.com/influxdata/telegraf/plugins/outputs/wavefront"
 	_ "github.com/influxdata/telegraf/plugins/outputs/yandex_cloud_monitoring"
-	_ "github.com/influxdata/telegraf/plugins/outputs/zabbix"
 )
