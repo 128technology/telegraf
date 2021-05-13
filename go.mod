@@ -169,3 +169,5 @@ require (
 
 // replaced due to https://github.com/satori/go.uuid/issues/73
 replace github.com/satori/go.uuid => github.com/gofrs/uuid v3.2.0+incompatible
+
+replace github.com/Shopify/sarama v1.29.0 => github.com/128technology/sarama v1.29.1-1-128tech
