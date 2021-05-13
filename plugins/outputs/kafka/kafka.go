@@ -368,6 +368,7 @@ func (k *Kafka) Write(metrics []telegraf.Metric) error {
 	if err != nil {
 		// We could have many errors, return only the first encountered.
 		if errs, ok := err.(sarama.ProducerErrors); ok {
+			var prodErrTemp *sarama.ProducerError = nil
 			for _, prodErr := range errs {
 				if prodErr.Err == sarama.ErrMessageSizeTooLarge {
 					k.Log.Error("Message too large, consider increasing `max_message_bytes`; dropping batch")
@@ -377,7 +378,11 @@ func (k *Kafka) Write(metrics []telegraf.Metric) error {
 					k.Log.Error("The timestamp of the message is out of acceptable range, consider increasing broker `message.timestamp.difference.max.ms`; dropping batch")
 					return nil
 				}
-				return prodErr
+				prodErrTemp = prodErr
+				k.Log.Errorf("Error when sending message: %+v - %+v", *(prodErr.Msg), *prodErr)
+			}
+			if prodErrTemp != nil {
+				return prodErrTemp
 			}
 		}
 		return err
