@@ -365,11 +365,15 @@ func (k *Kafka) Write(metrics []telegraf.Metric) error {
 		msgs = append(msgs, m)
 	}
 
-	err := k.producer.SendMessages(msgs)
-	if err != nil {
-		// We could have many errors, return only the first encountered.
+	var err error = nil
+	for i := 0; i < 5; i++ {
+		err = k.producer.SendMessages(msgs)
+		if err == nil {
+			break
+		}
+
 		if errs, ok := err.(sarama.ProducerErrors); ok {
-			var prodErrTemp *sarama.ProducerError = nil
+			unsentMsgs := make([]*sarama.ProducerMessage, len(errs))
 			for _, prodErr := range errs {
 				if prodErr.Err == sarama.ErrMessageSizeTooLarge {
 					k.Log.Error("Message too large, consider increasing `max_message_bytes`; dropping batch")
@@ -379,17 +383,17 @@ func (k *Kafka) Write(metrics []telegraf.Metric) error {
 					k.Log.Error("The timestamp of the message is out of acceptable range, consider increasing broker `message.timestamp.difference.max.ms`; dropping batch")
 					return nil
 				}
-				prodErrTemp = prodErr
+				unsentMsgs = append(unsentMsgs, prodErr.Msg)
 				k.Log.Errorf("Error when sending message: %+v : message = %s - %+v", *(prodErr.Msg), prodErr.Msg.Value, *prodErr)
 			}
-			if prodErrTemp != nil {
-				return prodErrTemp
-			}
+
+			msgs = unsentMsgs
 		}
-		return err
+
+		k.Log.Infof("Failed to send all messages after try %d", i)
 	}
 
-	return nil
+	return err
 }
 
 func init() {
