@@ -334,7 +334,7 @@ func (k *Kafka) routingKey(metric telegraf.Metric) (string, error) {
 
 func (k *Kafka) Write(metrics []telegraf.Metric) error {
 	msgs := make([]*sarama.ProducerMessage, 0, len(metrics))
-	for _, metric := range metrics {
+	for idx, metric := range metrics {
 		metric, topic := k.GetTopicName(metric)
 
 		buf, err := k.serializer.Serialize(metric)
@@ -344,8 +344,9 @@ func (k *Kafka) Write(metrics []telegraf.Metric) error {
 		}
 
 		m := &sarama.ProducerMessage{
-			Topic: topic,
-			Value: sarama.ByteEncoder(buf),
+			Topic:    topic,
+			Value:    sarama.ByteEncoder(buf),
+			Metadata: idx,
 		}
 
 		// Negative timestamps are not allowed by the Kafka protocol.
@@ -379,7 +380,7 @@ func (k *Kafka) Write(metrics []telegraf.Metric) error {
 					return nil
 				}
 				prodErrTemp = prodErr
-				k.Log.Errorf("Error when sending message: %+v - %+v", *(prodErr.Msg), *prodErr)
+				k.Log.Errorf("Error when sending message: %+v : message = %s - %+v", *(prodErr.Msg), prodErr.Msg.Value, *prodErr)
 			}
 			if prodErrTemp != nil {
 				return prodErrTemp
