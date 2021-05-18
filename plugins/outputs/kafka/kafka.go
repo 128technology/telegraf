@@ -383,7 +383,8 @@ func (k *Kafka) Write(metrics []telegraf.Metric) error {
 					k.Log.Error("The timestamp of the message is out of acceptable range, consider increasing broker `message.timestamp.difference.max.ms`; dropping batch")
 					return nil
 				}
-				unsentMsgs = append(unsentMsgs, prodErr.Msg)
+				newMsg := *prodErr.Msg
+				unsentMsgs = append(unsentMsgs, &newMsg)
 				k.Log.Errorf("Error when sending message: %+v : message = %s - %+v", *(prodErr.Msg), prodErr.Msg.Value, *prodErr)
 			}
 
