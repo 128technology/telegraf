@@ -348,8 +348,6 @@ func (p *MockErrorProducer) SendMessage(msg *sarama.ProducerMessage) (partition 
 }
 
 func (p *MockErrorProducer) SendMessages(msgs []*sarama.ProducerMessage) error {
-	fmt.Println(p.WhenToError)
-	fmt.Println(msgs)
 	errs := sarama.ProducerErrors{}
 	for i := 0; i < len(msgs); i++ {
 		if p.attemptIndex >= len(p.WhenToError) {

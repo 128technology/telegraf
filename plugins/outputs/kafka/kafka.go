@@ -393,7 +393,6 @@ func (k *Kafka) Write(metrics []telegraf.Metric) error {
 
 		errs, ok := err.(sarama.ProducerErrors)
 		if ok {
-			fmt.Print(errs)
 			k.Log.Debugf("Returned errors: %+v", errs)
 
 			unsentMsgs := make([]*sarama.ProducerMessage, len(errs))
