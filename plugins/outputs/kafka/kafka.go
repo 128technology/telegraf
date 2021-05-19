@@ -181,7 +181,7 @@ var sampleConfig = `
   ## until the next flush.
   # max_retry = 3
 
-  ## The maxinum number of times to retry sending all of the metrics in a batch
+  ## The maximum number of times to retry sending all of the metrics in a batch
   ## until the next flush. Only the unsuccessful metrics will be sent again.
   # max_batch_retry = 5
 
@@ -391,7 +391,9 @@ func (k *Kafka) Write(metrics []telegraf.Metric) error {
 			break
 		}
 
-		if errs, ok := err.(sarama.ProducerErrors); ok {
+		errs, ok := err.(sarama.ProducerErrors)
+		if ok {
+			fmt.Print(errs)
 			k.Log.Debugf("Returned errors: %+v", errs)
 
 			unsentMsgs := make([]*sarama.ProducerMessage, len(errs))
@@ -414,7 +416,7 @@ func (k *Kafka) Write(metrics []telegraf.Metric) error {
 			msgs = unsentMsgs
 		}
 
-		k.Log.Infof("Failed to send all messages after try %d", i)
+		k.Log.Infof("Failed to send %d messages after try %d", len(errs), i)
 	}
 
 	return err
