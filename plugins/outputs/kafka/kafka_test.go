@@ -25,10 +25,11 @@ func TestConnectAndWrite(t *testing.T) {
 	brokers := []string{testutil.GetLocalHost() + ":9092"}
 	s, _ := serializers.NewInfluxSerializer()
 	k := &Kafka{
-		Brokers:      brokers,
-		Topic:        "Test",
-		serializer:   s,
-		producerFunc: sarama.NewSyncProducer,
+		Brokers:       brokers,
+		Topic:         "Test",
+		serializer:    s,
+		MaxBatchRetry: 1,
+		producerFunc:  sarama.NewSyncProducer,
 	}
 
 	// Verify that we can connect to the Kafka broker
@@ -81,8 +82,9 @@ func TestTopicSuffixes(t *testing.T) {
 		topicSuffix := testcase.topicSuffix
 		expectedTopic := testcase.expectedTopic
 		k := &Kafka{
-			Topic:       topic,
-			TopicSuffix: topicSuffix,
+			Topic:         topic,
+			TopicSuffix:   topicSuffix,
+			MaxBatchRetry: 1,
 		}
 
 		_, topic := k.GetTopicName(metric)
@@ -114,7 +116,8 @@ func TestRoutingKey(t *testing.T) {
 		{
 			name: "static routing key",
 			kafka: &Kafka{
-				RoutingKey: "static",
+				RoutingKey:    "static",
+				MaxBatchRetry: 1,
 			},
 			metric: func() telegraf.Metric {
 				m, _ := metric.New(
@@ -134,7 +137,8 @@ func TestRoutingKey(t *testing.T) {
 		{
 			name: "random routing key",
 			kafka: &Kafka{
-				RoutingKey: "random",
+				RoutingKey:    "random",
+				MaxBatchRetry: 1,
 			},
 			metric: func() telegraf.Metric {
 				m, _ := metric.New(
@@ -194,9 +198,10 @@ func TestTopicTag(t *testing.T) {
 		{
 			name: "static topic",
 			plugin: &Kafka{
-				Brokers:      []string{"127.0.0.1"},
-				Topic:        "telegraf",
-				producerFunc: NewMockProducer,
+				Brokers:       []string{"127.0.0.1"},
+				Topic:         "telegraf",
+				MaxBatchRetry: 1,
+				producerFunc:  NewMockProducer,
 			},
 			input: []telegraf.Metric{
 				testutil.MustMetric(
@@ -214,10 +219,11 @@ func TestTopicTag(t *testing.T) {
 		{
 			name: "topic tag overrides static topic",
 			plugin: &Kafka{
-				Brokers:      []string{"127.0.0.1"},
-				Topic:        "telegraf",
-				TopicTag:     "topic",
-				producerFunc: NewMockProducer,
+				Brokers:       []string{"127.0.0.1"},
+				Topic:         "telegraf",
+				TopicTag:      "topic",
+				MaxBatchRetry: 1,
+				producerFunc:  NewMockProducer,
 			},
 			input: []telegraf.Metric{
 				testutil.MustMetric(
@@ -237,10 +243,11 @@ func TestTopicTag(t *testing.T) {
 		{
 			name: "missing topic tag falls back to  static topic",
 			plugin: &Kafka{
-				Brokers:      []string{"127.0.0.1"},
-				Topic:        "telegraf",
-				TopicTag:     "topic",
-				producerFunc: NewMockProducer,
+				Brokers:       []string{"127.0.0.1"},
+				Topic:         "telegraf",
+				TopicTag:      "topic",
+				MaxBatchRetry: 1,
+				producerFunc:  NewMockProducer,
 			},
 			input: []telegraf.Metric{
 				testutil.MustMetric(
@@ -262,6 +269,7 @@ func TestTopicTag(t *testing.T) {
 				Topic:           "telegraf",
 				TopicTag:        "topic",
 				ExcludeTopicTag: true,
+				MaxBatchRetry:   1,
 				producerFunc:    NewMockProducer,
 			},
 			input: []telegraf.Metric{
