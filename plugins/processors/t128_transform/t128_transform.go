@@ -12,13 +12,17 @@ import (
 )
 
 const sampleConfig = `
-	## If more than this amount of time passes between data points, the
-	## previous value will be considered old and the value will be recalculated
-	## as if it hadn't been seen before. A zero expiration means never expire.
+	## For 'rate' and 'diff', if more than this amount of time passes between
+	## data points, the previous value will be considered old and the value will
+	## be recalculated as if it hadn't been seen before. A zero expiration means
+	## never expire.
+	##
+	## When using the 'state-change' transform, an update metric will be sent
+	## upon expiration even if the value has not changed.
 	# expiration = "0s"
 
 	## The operation that should be performed between two observed points.
-	## It can be 'diff' or 'rate'
+	## It can be 'diff', 'rate', or 'state-change'.
 	# transform = "rate"
 
 	## For the fields who's key/value pairs don't match, should the original
@@ -31,7 +35,7 @@ const sampleConfig = `
 	# "/inline/replace" = "/inline/replace"
 `
 
-type transformer = func(t1, t2 time.Time, v1, v2 float64) (float64, error)
+type transformer = func(expired bool, t1, t2 time.Time, v1, v2 interface{}) (interface{}, error)
 
 type T128Transform struct {
 	Fields         map[string]string `toml:"fields"`
@@ -52,7 +56,7 @@ type target struct {
 }
 
 type observedValue struct {
-	value     float64
+	value     interface{}
 	expires   time.Time
 	timestamp time.Time
 }
@@ -77,36 +81,35 @@ func (r *T128Transform) Apply(in ...telegraf.Metric) []telegraf.Metric {
 				continue
 			}
 
-			currentValue, converted := convert(field.Value)
-			if !converted {
-				r.Log.Warnf("Failed to convert field '%s' to float for transformation. This transformation will be skipped.")
-				continue
-			}
-
 			cacheFields, metricIsCached := r.cache[seriesHash]
 			if !metricIsCached {
 				r.cache[seriesHash] = make(map[string]observedValue, 0)
 			}
 
-			itemAdded := false
-			if observed, ok := cacheFields[field.Key]; ok {
-				if point.Time().Before(observed.expires) {
-					value, err := r.transform(observed.timestamp, point.Time(), observed.value, currentValue)
-					if err != nil {
-						r.Log.Warnf("excluding failed transform: %v", err)
-					} else {
-						point.AddField(target.key, value)
-						itemAdded = true
-					}
+			observed, ok := cacheFields[field.Key]
+			if !ok {
+				observed = observedValue{
+					value: nil,
 				}
 			}
 
-			if (target.matchesSource && !itemAdded) || (!target.matchesSource && r.RemoveOriginal) {
+			expired := !point.Time().Before(observed.expires)
+
+			itemTransformed := false
+			value, err := r.transform(expired, observed.timestamp, point.Time(), observed.value, field.Value)
+			if err != nil {
+				r.Log.Warnf("excluding failed transform: %v", err)
+			} else if value != nil {
+				itemTransformed = true
+				point.AddField(target.key, value)
+			}
+
+			if (target.matchesSource && !itemTransformed) || (!target.matchesSource && r.RemoveOriginal) {
 				removeFields = append(removeFields, field.Key)
 			}
 
 			r.cache[seriesHash][field.Key] = observedValue{
-				value:     currentValue,
+				value:     field.Value,
 				expires:   point.Time().Add(r.Expiration.Duration),
 				timestamp: point.Time(),
 			}
@@ -127,11 +130,24 @@ func (r *T128Transform) Init() error {
 
 	switch r.Transform {
 	case "diff":
-		r.transform = func(t1, t2 time.Time, v1, v2 float64) (float64, error) {
-			return v2 - v1, nil
+		r.transform = func(expired bool, t1, t2 time.Time, v1, v2 interface{}) (interface{}, error) {
+			if expired || v1 == nil {
+				return nil, nil
+			}
+
+			prev, current, err := convertToFloats(v1, v2)
+			if err != nil {
+				return 0, err
+			}
+
+			return current - prev, nil
 		}
 	case "rate":
-		r.transform = func(t1, t2 time.Time, v1, v2 float64) (float64, error) {
+		r.transform = func(expired bool, t1, t2 time.Time, v1, v2 interface{}) (interface{}, error) {
+			if expired || v1 == nil {
+				return nil, nil
+			}
+
 			if !t1.Before(t2) {
 				return 0, fmt.Errorf(
 					"asked to compute the rate between points with non-increasing timestamps: %v at %v and %v at %v",
@@ -139,10 +155,27 @@ func (r *T128Transform) Init() error {
 				)
 			}
 
-			return (v2 - v1) / (t2.Sub(t1).Seconds()), nil
+			prev, current, err := convertToFloats(v1, v2)
+			if err != nil {
+				return 0, err
+			}
+
+			return (current - prev) / (t2.Sub(t1).Seconds()), nil
+		}
+	case "state-change":
+		r.transform = func(expired bool, t1, t2 time.Time, v1, v2 interface{}) (interface{}, error) {
+			if expired || v1 == nil {
+				return v2, nil
+			}
+
+			if v1 != v2 {
+				return v2, nil
+			}
+
+			return nil, nil
 		}
 	default:
-		return fmt.Errorf("'transform' is required and must be 'diff' or 'rate'")
+		return fmt.Errorf("'transform' is required and must be 'diff', 'rate', or 'state-change'")
 	}
 
 	for dest, src := range r.Fields {
@@ -173,8 +206,12 @@ func (r *T128Transform) Init() error {
 }
 
 func newTransform() *T128Transform {
+	return newTransformType("rate")
+}
+
+func newTransformType(transformType string) *T128Transform {
 	return &T128Transform{
-		Transform:    "rate",
+		Transform:    transformType,
 		targetFields: make(map[string]target),
 		cache:        make(map[uint64]map[string]observedValue),
 	}
@@ -186,15 +223,29 @@ func init() {
 	})
 }
 
-func convert(in interface{}) (float64, bool) {
+func convertToFloats(a, b interface{}) (float64, float64, error) {
+	v1, err := convertToFloat(a)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	v2, err := convertToFloat(b)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	return v1, v2, nil
+}
+
+func convertToFloat(in interface{}) (float64, error) {
 	switch v := in.(type) {
 	case float64:
-		return v, true
+		return v, nil
 	case int64:
-		return float64(v), true
+		return float64(v), nil
 	case uint64:
-		return float64(v), true
+		return float64(v), nil
 	default:
-		return 0, false
+		return 0, fmt.Errorf("Failed to convert field '%s' to float for transformation. This transformation will be skipped.", in)
 	}
 }

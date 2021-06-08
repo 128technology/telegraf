@@ -11,6 +11,12 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+var transformTypes []string = []string{
+	"rate",
+	"diff",
+	"state-change",
+}
+
 func newMetric(name string, tags map[string]string, fields map[string]interface{}, timestamp time.Time) telegraf.Metric {
 	if tags == nil {
 		tags = map[string]string{}
@@ -328,13 +334,17 @@ func TestFailsRateOnNonIncreasingTimestamp(t *testing.T) {
 }
 
 func TestFailsOnConflictingFieldMappings(t *testing.T) {
-	r := newTransform()
-	r.Fields = map[string]string{
-		"/my/rate":       "/my/total",
-		"/my/other/rate": "/my/total",
-	}
+	for _, transformType := range transformTypes {
+		t.Run(transformType, func(t *testing.T) {
+			r := newTransformType(transformType)
+			r.Fields = map[string]string{
+				"/my/rate":       "/my/total",
+				"/my/other/rate": "/my/total",
+			}
 
-	assert.EqualError(t, r.Init(), "both '/my/other/rate' and '/my/rate' are configured to be calculated from '/my/total'")
+			assert.EqualError(t, r.Init(), "both '/my/other/rate' and '/my/rate' are configured to be calculated from '/my/total'")
+		})
+	}
 }
 
 func TestFailsOnInvalidTransform(t *testing.T) {
@@ -342,7 +352,7 @@ func TestFailsOnInvalidTransform(t *testing.T) {
 	r.Fields = map[string]string{"/my/rate": "/my/rate"}
 	r.Transform = "invalid"
 
-	assert.EqualError(t, r.Init(), "'transform' is required and must be 'diff' or 'rate'")
+	assert.EqualError(t, r.Init(), "'transform' is required and must be 'diff', 'rate', or 'state-change'")
 }
 
 func TestLoadsFromToml(t *testing.T) {
