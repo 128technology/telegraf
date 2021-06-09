@@ -81,7 +81,7 @@ func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
 		Fields         map[string]string
 		Samples        []sample
 		PreviousFields map[string]string
-		TimeDelta      time.Duration
+		Timestamps     []int
 		RemoveOriginal bool
 		Result         sample
 	}{
@@ -92,7 +92,7 @@ func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
 				{},
 				{"/state": 50},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0, 5},
 			RemoveOriginal: true,
 			Result:         sample{"/state": int64(50)},
 		},
@@ -103,7 +103,7 @@ func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
 				{"/state": 45},
 				{"/state": 45},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0, 5},
 			RemoveOriginal: true,
 			Result:         sample{},
 		},
@@ -114,7 +114,7 @@ func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
 				{"/state": 45},
 				{"/state": 50},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0, 5},
 			RemoveOriginal: true,
 			Result:         sample{"/state": int64(50)},
 		},
@@ -125,7 +125,7 @@ func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
 				{"/state": 45},
 				{"/state": 50},
 			},
-			TimeDelta:      6 * time.Second,
+			Timestamps:     []int{0, 5},
 			RemoveOriginal: true,
 			Result:         sample{"/state": int64(50)},
 		},
@@ -136,7 +136,7 @@ func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
 				{},
 				{"/non-state": 50},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0, 5},
 			RemoveOriginal: true,
 			Result:         sample{"/state": int64(50)},
 		},
@@ -147,7 +147,7 @@ func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
 				{"/non-state": 45},
 				{"/non-state": 45},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0, 5},
 			RemoveOriginal: true,
 			Result:         sample{},
 		},
@@ -158,7 +158,7 @@ func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
 				{"/non-state": 45},
 				{"/non-state": 50},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0, 5},
 			RemoveOriginal: true,
 			Result:         sample{"/state": int64(50)},
 		},
@@ -169,7 +169,7 @@ func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
 				{"/non-state": 45},
 				{"/non-state": 50},
 			},
-			TimeDelta:      6 * time.Second,
+			Timestamps:     []int{0, 6},
 			RemoveOriginal: true,
 			Result:         sample{"/state": int64(50)},
 		},
@@ -180,7 +180,7 @@ func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
 				{},
 				{"/state": 50},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0, 5},
 			RemoveOriginal: false,
 			Result:         sample{"/state": int64(50)},
 		},
@@ -191,7 +191,7 @@ func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
 				{"/state": 45},
 				{"/state": 45},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0, 5},
 			RemoveOriginal: false,
 			Result:         sample{},
 		},
@@ -202,7 +202,7 @@ func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
 				{"/state": 45},
 				{"/state": 50},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0, 5},
 			RemoveOriginal: false,
 			Result:         sample{"/state": int64(50)},
 		},
@@ -213,7 +213,7 @@ func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
 				{"/state": 45},
 				{"/state": 50},
 			},
-			TimeDelta:      6 * time.Second,
+			Timestamps:     []int{0, 6},
 			RemoveOriginal: false,
 			Result:         sample{"/state": int64(50)},
 		},
@@ -224,7 +224,7 @@ func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
 				{},
 				{"/non-state": 50},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0, 5},
 			RemoveOriginal: false,
 			Result:         sample{"/non-state": int64(50), "/state": int64(50)},
 		},
@@ -235,7 +235,7 @@ func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
 				{"/non-state": 45},
 				{"/non-state": 45},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0, 5},
 			RemoveOriginal: false,
 			Result:         sample{"/non-state": int64(45)},
 		},
@@ -246,7 +246,7 @@ func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
 				{"/non-state": 45},
 				{"/non-state": 50},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0, 5},
 			RemoveOriginal: false,
 			Result:         sample{"/non-state": int64(50), "/state": int64(50)},
 		},
@@ -257,7 +257,7 @@ func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
 				{"/non-state": 45},
 				{"/non-state": 50},
 			},
-			TimeDelta:      6 * time.Second,
+			Timestamps:     []int{0, 6},
 			RemoveOriginal: false,
 			Result:         sample{"/non-state": int64(50), "/state": int64(50)},
 		},
@@ -269,7 +269,7 @@ func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
 			Samples: []sample{
 				{"/state": "s1"},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0},
 			RemoveOriginal: true,
 			Result:         sample{"/state": "s1"},
 		},
@@ -281,7 +281,20 @@ func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
 				{"/state": "s1"},
 				{"/state": "s2"},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0, 5},
+			RemoveOriginal: true,
+			Result:         sample{"/state": "s2", "/previous": "s1"},
+		},
+		{
+			Name:           "previous-after-multiple-matching",
+			Fields:         map[string]string{"/state": "/state"},
+			PreviousFields: map[string]string{"/previous": "/state"},
+			Samples: []sample{
+				{"/state": "s1"},
+				{"/state": "s1"},
+				{"/state": "s2"},
+			},
+			Timestamps:     []int{0, 5, 10},
 			RemoveOriginal: true,
 			Result:         sample{"/state": "s2", "/previous": "s1"},
 		},
@@ -293,14 +306,35 @@ func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
 				{"/state": "s1"},
 				{"/state": "s2"},
 			},
-			TimeDelta:      6 * time.Second,
+			Timestamps:     []int{0, 6},
 			RemoveOriginal: true,
 			Result:         sample{"/state": "s2", "/previous": "s1"},
+		},
+		{
+			Name:           "previous-after-expired",
+			Fields:         map[string]string{"/state": "/state"},
+			PreviousFields: map[string]string{"/previous": "/state"},
+			Samples: []sample{
+				{"/state": "s1"},
+				{"/state": "s2"},
+				{"/state": "s3"},
+			},
+			Timestamps:     []int{0, 6, 11},
+			RemoveOriginal: true,
+			Result:         sample{"/state": "s3", "/previous": "s2"},
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.Name, func(t *testing.T) {
+			assert.True(t, len(testCase.Samples) > 0)
+
+			assert.Truef(t,
+				len(testCase.Samples) == len(testCase.Timestamps),
+				"The number of timestamps (%v) needs to equal the number of samples (%v)",
+				len(testCase.Timestamps),
+				len(testCase.Samples),
+			)
 			r := newTransformType("state-change")
 			r.Fields = testCase.Fields
 			r.PreviousFields = testCase.PreviousFields
@@ -309,14 +343,14 @@ func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
 			assert.Nil(t, r.Init())
 
 			t1 := time.Now()
-			for i := 0; i < len(testCase.Samples)-1; i++ {
-				timestamp := t1.Add(time.Duration(i) * testCase.TimeDelta)
-				r.Apply(newMetric("foo", nil, testCase.Samples[i], timestamp))
+			sampleIndex := 0
+			for sampleIndex = 0; sampleIndex < len(testCase.Samples)-1; sampleIndex++ {
+				r.Apply(newMetric("foo", nil, testCase.Samples[sampleIndex], t1.Add(time.Duration(testCase.Timestamps[sampleIndex])*time.Second)))
 			}
 
 			m := newMetric("foo", nil,
-				testCase.Samples[len(testCase.Samples)-1],
-				t1.Add(testCase.TimeDelta*time.Duration(len(testCase.Samples)-1)),
+				testCase.Samples[sampleIndex],
+				t1.Add(time.Duration(testCase.Timestamps[sampleIndex])*time.Second),
 			)
 
 			result := r.Apply(m)[0]

@@ -172,7 +172,7 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 		Fields         map[string]string
 		Samples        []sample
 		PreviousFields map[string]string
-		TimeDelta      time.Duration
+		Timestamps     []int
 		RemoveOriginal bool
 		Result         sample
 	}{
@@ -183,7 +183,7 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 				{},
 				{"/rate": 50},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0, 5},
 			RemoveOriginal: true,
 			Result:         sample{},
 		},
@@ -194,7 +194,7 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 				{"/rate": 45},
 				{"/rate": 50},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0, 5},
 			RemoveOriginal: true,
 			Result:         sample{"/rate": float64(1)},
 		},
@@ -205,7 +205,7 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 				{"/rate": 45},
 				{"/rate": 50},
 			},
-			TimeDelta:      6 * time.Second,
+			Timestamps:     []int{0, 6},
 			RemoveOriginal: true,
 			Result:         sample{},
 		},
@@ -216,7 +216,7 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 				{},
 				{"/non-rate": 50},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0, 5},
 			RemoveOriginal: true,
 			Result:         sample{},
 		},
@@ -227,7 +227,7 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 				{"/non-rate": 45},
 				{"/non-rate": 50},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0, 5},
 			RemoveOriginal: true,
 			Result:         sample{"/rate": float64(1)},
 		},
@@ -238,7 +238,7 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 				{"/non-rate": 45},
 				{"/non-rate": 50},
 			},
-			TimeDelta:      6 * time.Second,
+			Timestamps:     []int{0, 6},
 			RemoveOriginal: true,
 			Result:         sample{},
 		},
@@ -250,7 +250,7 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 				{},
 				{"/rate": 50},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0, 5},
 			RemoveOriginal: false,
 			Result:         sample{},
 		},
@@ -261,7 +261,7 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 				{"/rate": 45},
 				{"/rate": 50},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0, 5},
 			RemoveOriginal: false,
 			Result:         sample{"/rate": float64(1)},
 		},
@@ -272,7 +272,7 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 				{"/rate": 45},
 				{"/rate": 50},
 			},
-			TimeDelta:      6 * time.Second,
+			Timestamps:     []int{0, 6},
 			RemoveOriginal: false,
 			Result:         sample{},
 		},
@@ -283,7 +283,7 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 				{},
 				{"/non-rate": 50},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0, 5},
 			RemoveOriginal: false,
 			Result:         sample{"/non-rate": int64(50)},
 		},
@@ -294,7 +294,7 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 				{"/non-rate": 45},
 				{"/non-rate": 50},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0, 5},
 			RemoveOriginal: false,
 			Result:         sample{"/non-rate": int64(50), "/rate": float64(1)},
 		},
@@ -305,7 +305,7 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 				{"/non-rate": 45},
 				{"/non-rate": 50},
 			},
-			TimeDelta:      6 * time.Second,
+			Timestamps:     []int{0, 6},
 			RemoveOriginal: false,
 			Result:         sample{"/non-rate": int64(50)},
 		},
@@ -317,7 +317,7 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 			Samples: []sample{
 				{"/total": 50},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0},
 			RemoveOriginal: true,
 			Result:         sample{},
 		},
@@ -329,7 +329,7 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 				{"/total": 50},
 				{"/total": 55},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0, 5},
 			RemoveOriginal: true,
 			Result:         sample{"/rate": float64(1)},
 		},
@@ -342,28 +342,67 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 				{"/total": 55},
 				{"/total": 60},
 			},
-			TimeDelta:      5 * time.Second,
+			Timestamps:     []int{0, 5, 10},
 			RemoveOriginal: true,
 			Result:         sample{"/rate": float64(1), "/previous": float64(2)},
 		},
 		{
-			Name:           "previous-matching-expired",
+			Name:           "previous-expired",
 			Fields:         map[string]string{"/rate": "/total"},
 			PreviousFields: map[string]string{"/previous": "/rate"},
 			Samples: []sample{
 				{"/total": 45},
 				{"/total": 50},
-				{"/total": 55},
+				{"/total": 55}, // previous assigned here
+				{"/total": 60},
 			},
-			TimeDelta:      6 * time.Second,
+			Timestamps:     []int{0, 5, 10, 16},
 			RemoveOriginal: true,
 			Result:         sample{},
+		},
+		{
+			Name:           "previous-null-after-expired",
+			Fields:         map[string]string{"/rate": "/total"},
+			PreviousFields: map[string]string{"/previous": "/rate"},
+			Samples: []sample{
+				{"/total": 45},
+				{"/total": 50},
+				{"/total": 55}, // previous assigned here
+				{"/total": 60}, // expired here
+				{"/total": 65}, // first point - shouldn't have previous
+			},
+			Timestamps:     []int{0, 5, 10, 16, 21},
+			RemoveOriginal: true,
+			Result:         sample{"/rate": float64(1)},
+		},
+		{
+			Name:           "previous-valid-multiple-after-expired",
+			Fields:         map[string]string{"/rate": "/total"},
+			PreviousFields: map[string]string{"/previous": "/rate"},
+			Samples: []sample{
+				{"/total": 45},
+				{"/total": 50},
+				{"/total": 55}, // previous assigned
+				{"/total": 65},
+				{"/total": 70}, // first point
+				{"/total": 80}, // first with previous
+			},
+			Timestamps:     []int{0, 5, 10, 16, 21, 26},
+			RemoveOriginal: true,
+			Result:         sample{"/rate": float64(2), "/previous": float64(1)},
 		},
 	}
 
 	for _, testCase := range testCases {
 		t.Run(testCase.Name, func(t *testing.T) {
 			assert.True(t, len(testCase.Samples) > 0)
+
+			assert.Truef(t,
+				len(testCase.Samples) == len(testCase.Timestamps),
+				"The number of timestamps (%v) needs to equal the number of samples (%v)",
+				len(testCase.Timestamps),
+				len(testCase.Samples),
+			)
 
 			r := newTransform()
 			r.Fields = testCase.Fields
@@ -374,14 +413,19 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 			assert.Nil(t, r.Init())
 
 			t1 := time.Now()
-			for i := 0; i < len(testCase.Samples)-1; i++ {
-				timestamp := t1.Add(time.Duration(i) * testCase.TimeDelta)
-				r.Apply(newMetric("foo", nil, testCase.Samples[i], timestamp))
+			sampleIndex := 0
+			for sampleIndex = 0; sampleIndex < len(testCase.Samples)-1; sampleIndex++ {
+				r.Apply(newMetric(
+					"foo",
+					nil,
+					testCase.Samples[sampleIndex],
+					t1.Add(time.Duration(testCase.Timestamps[sampleIndex])*time.Second)),
+				)
 			}
 
 			m := newMetric("foo", nil,
-				testCase.Samples[len(testCase.Samples)-1],
-				t1.Add(testCase.TimeDelta*time.Duration(len(testCase.Samples)-1)),
+				testCase.Samples[sampleIndex],
+				t1.Add(time.Duration(testCase.Timestamps[sampleIndex])*time.Second),
 			)
 
 			result := r.Apply(m)[0]

@@ -45,7 +45,9 @@ const sampleConfig = `
 	# "/rate/metric/previous" = "/rate/metric"
 `
 
-type transformer = func(expired bool, t1, t2 time.Time, v1, v2 interface{}) (interface{}, error)
+type transformer = func(expired bool, t1, t2 time.Time, v1, v2 interface{}) (
+	value interface{}, recordAsPrevious bool, err error,
+)
 
 type T128Transform struct {
 	Fields         map[string]string `toml:"fields"`
@@ -111,7 +113,13 @@ func (r *T128Transform) Apply(in ...telegraf.Metric) []telegraf.Metric {
 			expired := !point.Time().Before(observed.expires)
 
 			itemTransformed := false
-			value, err := r.transform(expired, observed.timestamp, point.Time(), observed.value, field.Value)
+			value, recordAsPrevious, err := r.transform(
+				expired,
+				observed.timestamp,
+				point.Time(),
+				observed.value,
+				field.Value,
+			)
 			if err != nil {
 				r.Log.Warnf("excluding failed transform: %v", err)
 			} else if value != nil {
@@ -127,9 +135,14 @@ func (r *T128Transform) Apply(in ...telegraf.Metric) []telegraf.Metric {
 				point.AddField(target.previousKey, observed.previous)
 			}
 
+			newPrevious := observed.previous
+			if recordAsPrevious {
+				newPrevious = value
+			}
+
 			r.cache[seriesHash][field.Key] = observedValue{
 				value:     field.Value,
-				previous:  value,
+				previous:  newPrevious,
 				expires:   point.Time().Add(r.Expiration.Duration),
 				timestamp: point.Time(),
 			}
@@ -150,26 +163,26 @@ func (r *T128Transform) Init() error {
 
 	switch r.Transform {
 	case "diff":
-		r.transform = func(expired bool, t1, t2 time.Time, v1, v2 interface{}) (interface{}, error) {
+		r.transform = func(expired bool, t1, t2 time.Time, v1, v2 interface{}) (interface{}, bool, error) {
 			if expired || v1 == nil {
-				return nil, nil
+				return nil, true, nil
 			}
 
 			prev, current, err := convertToFloats(v1, v2)
 			if err != nil {
-				return 0, err
+				return 0, false, err
 			}
 
-			return current - prev, nil
+			return current - prev, true, nil
 		}
 	case "rate":
-		r.transform = func(expired bool, t1, t2 time.Time, v1, v2 interface{}) (interface{}, error) {
+		r.transform = func(expired bool, t1, t2 time.Time, v1, v2 interface{}) (interface{}, bool, error) {
 			if expired || v1 == nil {
-				return nil, nil
+				return nil, true, nil
 			}
 
 			if !t1.Before(t2) {
-				return 0, fmt.Errorf(
+				return 0, false, fmt.Errorf(
 					"asked to compute the rate between points with non-increasing timestamps: %v at %v and %v at %v",
 					v1, t1, v2, t2,
 				)
@@ -177,22 +190,22 @@ func (r *T128Transform) Init() error {
 
 			prev, current, err := convertToFloats(v1, v2)
 			if err != nil {
-				return 0, err
+				return 0, false, err
 			}
 
-			return (current - prev) / (t2.Sub(t1).Seconds()), nil
+			return (current - prev) / (t2.Sub(t1).Seconds()), true, nil
 		}
 	case "state-change":
-		r.transform = func(expired bool, t1, t2 time.Time, v1, v2 interface{}) (interface{}, error) {
+		r.transform = func(expired bool, t1, t2 time.Time, v1, v2 interface{}) (interface{}, bool, error) {
 			if expired || v1 == nil {
-				return v2, nil
+				return v2, true, nil
 			}
 
 			if v1 != v2 {
-				return v2, nil
+				return v2, true, nil
 			}
 
-			return nil, nil
+			return nil, false, nil
 		}
 	default:
 		return fmt.Errorf("'transform' is required and must be 'diff', 'rate', or 'state-change'")
