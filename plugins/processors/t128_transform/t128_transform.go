@@ -29,16 +29,27 @@ const sampleConfig = `
 	## field be removed?
 	# remove-original = true
 
+	## Specify a field to be populated with the last produced value. If the
+	## field name is an empty string or there is no prior value, the field will
+	## be excluded.
+	# previous_field = ""
+
 [processors.t128_transform.fields]
 	## Replace fields with their computed values, renaming them if indicated
 	# "/rate/metric" = "/total/metric"
 	# "/inline/replace" = "/inline/replace"
+
+[processors.t128_transform.previous_fields]
+	## Populate these fields with the previous transformed value. If there is no
+	## prior value, the field will be excluded.
+	# "/rate/metric/previous" = "/rate/metric"
 `
 
 type transformer = func(expired bool, t1, t2 time.Time, v1, v2 interface{}) (interface{}, error)
 
 type T128Transform struct {
 	Fields         map[string]string `toml:"fields"`
+	PreviousFields map[string]string `toml:"previous_fields"`
 	Expiration     internal.Duration `toml:"expiration"`
 	RemoveOriginal bool              `toml:"remove-original"`
 	Transform      string            `toml:"transform"`
@@ -46,17 +57,21 @@ type T128Transform struct {
 	Log telegraf.Logger `toml:"-"`
 
 	transform    transformer
-	targetFields map[string]target
+	targetFields map[string]*target
 	cache        map[uint64]map[string]observedValue
 }
 
 type target struct {
 	key           string
+	previousKey   string
 	matchesSource bool
 }
 
 type observedValue struct {
-	value     interface{}
+	value interface{}
+	// previous produced (transformed) value, not previous observed
+	// (the two would be the same in some cases)
+	previous  interface{}
 	expires   time.Time
 	timestamp time.Time
 }
@@ -108,8 +123,13 @@ func (r *T128Transform) Apply(in ...telegraf.Metric) []telegraf.Metric {
 				removeFields = append(removeFields, field.Key)
 			}
 
+			if itemTransformed && target.previousKey != "" && observed.previous != nil {
+				point.AddField(target.previousKey, observed.previous)
+			}
+
 			r.cache[seriesHash][field.Key] = observedValue{
 				value:     field.Value,
+				previous:  value,
 				expires:   point.Time().Add(r.Expiration.Duration),
 				timestamp: point.Time(),
 			}
@@ -187,9 +207,21 @@ func (r *T128Transform) Init() error {
 			return fmt.Errorf("both '%s' and '%s' are configured to be calculated from '%s'", conflicting[0], conflicting[1], src)
 		}
 
-		r.targetFields[src] = target{
+		r.targetFields[src] = &target{
 			key:           dest,
 			matchesSource: src == dest,
+		}
+	}
+
+	for previous, original := range r.PreviousFields {
+		if src, ok := r.Fields[original]; ok {
+			if target, ok := r.targetFields[src]; ok {
+				target.previousKey = previous
+			} else {
+				return fmt.Errorf("failed to lookup the target for previous field '%v' which is based on '%v' (developer error)", previous, original)
+			}
+		} else {
+			return fmt.Errorf("the previous field '%v' references a transformed field '%v' which does not exist", previous, original)
 		}
 	}
 
@@ -211,9 +243,10 @@ func newTransform() *T128Transform {
 
 func newTransformType(transformType string) *T128Transform {
 	return &T128Transform{
-		Transform:    transformType,
-		targetFields: make(map[string]target),
-		cache:        make(map[uint64]map[string]observedValue),
+		Transform:      transformType,
+		PreviousFields: make(map[string]string),
+		targetFields:   make(map[string]*target),
+		cache:          make(map[uint64]map[string]observedValue),
 	}
 }
 
