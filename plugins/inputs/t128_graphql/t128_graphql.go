@@ -31,7 +31,6 @@ type T128GraphQL struct {
 	EntryPoint    string            `toml:"entry_point"`
 	Fields        map[string]string `toml:"extract_fields"`
 	Tags          map[string]string `toml:"extract_tags"`
-	OtherTags     map[string]string `toml:"other_tags"`
 	Timeout       internal.Duration `toml:"timeout"`
 
 	Config      *Config
@@ -57,7 +56,24 @@ func (plugin *T128GraphQL) Init() error {
 	if err != nil {
 		return err
 	}
-	plugin.Config = LoadConfig(plugin.EntryPoint, plugin.Fields, plugin.Tags, plugin.OtherTags)
+
+	fieldsWithPartialPath, fieldsWithAbsPath, err := validateAndSeparateData(plugin.Fields, plugin.EntryPoint)
+	if err != nil {
+		return err
+	}
+
+	tagsWithPartialPath, tagsWithAbsPath, err := validateAndSeparateData(plugin.Tags, plugin.EntryPoint)
+	if err != nil {
+		return err
+	}
+
+	plugin.Config = LoadConfig(
+		plugin.EntryPoint,
+		fieldsWithPartialPath,
+		fieldsWithAbsPath,
+		tagsWithPartialPath,
+		tagsWithAbsPath,
+	)
 
 	//build query, json path to data and request body
 	plugin.Query = BuildQuery(plugin.Config)
@@ -109,11 +125,6 @@ func (plugin *T128GraphQL) checkConfig() error {
 
 	if plugin.Fields == nil {
 		return fmt.Errorf("extract_fields is a required configuration field")
-	}
-
-	err := validateOtherTags(plugin.OtherTags, plugin.EntryPoint)
-	if err != nil {
-		return err
 	}
 
 	return nil
@@ -227,13 +238,15 @@ func decodeAndReportJSONErrors(response []byte, template string) []error {
 	return errors
 }
 
-func validateOtherTags(otherTags map[string]string, entryPoint string) error {
+func validateAndSeparateData(data map[string]string, entryPoint string) (map[string]string, map[string]string, error) {
 	predicateRegex := regexp.MustCompile(`\(.*?\)`)
 	cleanEntryPoint := predicateRegex.ReplaceAllString(entryPoint, "")
+	dataWithPartialPath := make(map[string]string)
+	dataWithAbsPath := make(map[string]string)
 
-	for _, path := range otherTags {
+	for name, path := range data {
 		if predicateRegex.MatchString(path) {
-			return fmt.Errorf("other-tag path %s can not contain graphQL arguments", path)
+			return nil, nil, fmt.Errorf("absolute path %s on tag can not contain graphQL arguments", path)
 		}
 
 		leafIndex := strings.LastIndex(path, "/")
@@ -242,12 +255,15 @@ func validateOtherTags(otherTags map[string]string, entryPoint string) error {
 			pathToLeaf = pathToLeaf[:leafIndex]
 		}
 
-		if !strings.Contains(cleanEntryPoint, pathToLeaf) {
-			return fmt.Errorf("other-tag path %s must be subpath of %s", path, cleanEntryPoint)
+		if !strings.HasPrefix(cleanEntryPoint, pathToLeaf) {
+			dataWithPartialPath[name] = path
+			continue
 		}
+
+		dataWithAbsPath[name] = path
 	}
 
-	return nil
+	return dataWithPartialPath, dataWithAbsPath, nil
 }
 
 func init() {

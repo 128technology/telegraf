@@ -180,7 +180,7 @@ var QueryFormationTestCases = []struct {
 			test-field}}}}}}}`, "\t", ""),
 	},
 	{
-		Name: "build query with other tags",
+		Name: "build query with absolute path tags and fields",
 		ConfigIn: &plugin.Config{
 			Predicates: map[string]string{
 				".data.allServices.nodes.timeSeriesAnalytic.$predicate": "(metric:BANDWIDTH,router:\"${ROUTER}\",transform:AVERAGE,resolution:1000,startTime:\"now-180\",endTime:\"now\")",
@@ -188,6 +188,7 @@ var QueryFormationTestCases = []struct {
 			Fields: map[string]string{
 				".data.allServices.nodes.timeSeriesAnalytic.value":     "value",
 				".data.allServices.nodes.timeSeriesAnalytic.timestamp": "timestamp",
+				".data.allServices.nodes.other":                        "other-field",
 			},
 			Tags: map[string]string{
 				".data.allServices.nodes.timeSeriesAnalytic.test-tag": "test-tag",
@@ -198,6 +199,7 @@ var QueryFormationTestCases = []struct {
 			allServices{
 			nodes{
 			name
+			other
 			timeSeriesAnalytic(metric:BANDWIDTH,router:"${ROUTER}",transform:AVERAGE,resolution:1000,startTime:"now-180",endTime:"now"){
 			test-tag
 			timestamp

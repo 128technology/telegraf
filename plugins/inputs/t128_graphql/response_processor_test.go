@@ -345,10 +345,11 @@ var ResponseProcessingTestCases = []struct {
 		ExpectedError: nil,
 	},
 	{
-		Name: "process response with other tags",
+		Name: "process response for tags and fields with absolute path",
 		Fields: map[string]string{
 			".data.allServices.nodes.timeSeriesAnalytic.value":     "value",
 			".data.allServices.nodes.timeSeriesAnalytic.timestamp": "timestamp",
+			".data.allServices.nodes.other":                        "other-field",
 		},
 		Tags: map[string]string{
 			".data.allServices.nodes.timeSeriesAnalytic.test-tag": "test-tag",
@@ -360,6 +361,7 @@ var ResponseProcessingTestCases = []struct {
 				"nodes": [
 				  {
 					"name": "east",
+					"other": "moo",
 					"timeSeriesAnalytic": [
 					  {
 						"timestamp": "2021-06-14T21:10:00Z",
@@ -370,6 +372,7 @@ var ResponseProcessingTestCases = []struct {
 				  },
 				  {
 					"name": "west",
+					"other": "cow",
 					"timeSeriesAnalytic": [
 					  {
 						"timestamp": "2021-06-14T21:10:00Z",
@@ -385,8 +388,9 @@ var ResponseProcessingTestCases = []struct {
 		ExpectedOutput: []*plugin.ProcessedResponse{
 			{
 				Fields: map[string]interface{}{
-					"value":     "0",
-					"timestamp": "2021-06-14T21:10:00Z",
+					"value":       "0",
+					"timestamp":   "2021-06-14T21:10:00Z",
+					"other-field": "moo",
 				},
 				Tags: map[string]string{
 					"test-tag": "foo",
@@ -395,8 +399,9 @@ var ResponseProcessingTestCases = []struct {
 			},
 			{
 				Fields: map[string]interface{}{
-					"value":     "128",
-					"timestamp": "2021-06-14T21:10:00Z",
+					"value":       "128",
+					"timestamp":   "2021-06-14T21:10:00Z",
+					"other-field": "cow",
 				},
 				Tags: map[string]string{
 					"test-tag": "bar",
