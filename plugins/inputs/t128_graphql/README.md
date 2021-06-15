@@ -36,6 +36,12 @@ The graphql input plugin collects data from a 128T instance via graphQL.
 # [inputs.t128_graphql.extract_tags]
 #   peer-name = "name"
 #   device-interface = "paths/deviceInterface"
+
+## Other tags for filtering data with the desired name as the key (left) and the FULL graphQL 
+## query path as the value (right). The path should be a subpath of the entry_point but exclude
+## any desired graphQL arguments such as (name:'RTR_EAST_COMBO').
+# [inputs.t128_graphql.other_tags]
+#   router-name = "allRouters/nodes/name"
 ```
 
 ### Example GraphQL Query
@@ -45,6 +51,7 @@ For the configuration above, the plugin will build the following graphQL query:
 query {
   allRouters(name: "RTR_EAST_COMBO") {
     nodes {
+      name
       peers {
         nodes {
           name
@@ -69,6 +76,7 @@ For the query above, an example graphQL response is:
     "allRouters": {
       "nodes": [
         {
+          "name": "RTR_EAST_COMBO",
           "peers": {
             "nodes": [
               {
@@ -99,6 +107,6 @@ For the query above, an example graphQL response is:
 For the response above, the collector outputs:
 
 ```
-peer-paths,device-interface=10,peer-name=fake is-active=true,status="DOWN" 1617285085000000000
-peer-paths,device-interface=11,peer-name=fake is-active=true,status="UP" 1617285085000000000
+peer-paths,router-name=RTR_EAST_COMBO,device-interface=10,peer-name=fake is-active=true,status="DOWN" 1617285085000000000
+peer-paths,router-name=RTR_EAST_COMBO,device-interface=11,peer-name=fake is-active=true,status="UP" 1617285085000000000
 ```

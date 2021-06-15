@@ -179,6 +179,30 @@ var QueryFormationTestCases = []struct {
 			test-tag-1}
 			test-field}}}}}}}`, "\t", ""),
 	},
+	{
+		Name: "build query with other tags",
+		ConfigIn: &plugin.Config{
+			Predicates: map[string]string{
+				".data.allServices.nodes.timeSeriesAnalytic.$predicate": "(metric:BANDWIDTH,router:\"${ROUTER}\",transform:AVERAGE,resolution:1000,startTime:\"now-180\",endTime:\"now\")",
+			},
+			Fields: map[string]string{
+				".data.allServices.nodes.timeSeriesAnalytic.value":     "value",
+				".data.allServices.nodes.timeSeriesAnalytic.timestamp": "timestamp",
+			},
+			Tags: map[string]string{
+				".data.allServices.nodes.timeSeriesAnalytic.test-tag": "test-tag",
+				".data.allServices.nodes.name":                        "name",
+			},
+		},
+		ExpectedQuery: strings.ReplaceAll(`query {
+			allServices{
+			nodes{
+			name
+			timeSeriesAnalytic(metric:BANDWIDTH,router:"${ROUTER}",transform:AVERAGE,resolution:1000,startTime:"now-180",endTime:"now"){
+			test-tag
+			timestamp
+			value}}}}`, "\t", ""),
+	},
 }
 
 func TestT128GraphqlQueryFormation(t *testing.T) {

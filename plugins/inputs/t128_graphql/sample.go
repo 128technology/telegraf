@@ -31,4 +31,10 @@ var sampleConfig = `
 # [inputs.t128_graphql.extract_tags]
 #   peer-name = "name"
 #   device-interface = "paths/deviceInterface"
+
+## Other tags for filtering data with the desired name as the key (left) and the FULL graphQL 
+## query path as the value (right). The path should be a subpath of the entry_point but exclude
+## any desired graphQL arguments such as (name:'RTR_EAST_COMBO').
+# [inputs.t128_graphql.other_tags]
+#   router-name = "allRouters/nodes/name"
 `

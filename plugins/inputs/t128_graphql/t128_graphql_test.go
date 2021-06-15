@@ -25,8 +25,10 @@ type Endpoint struct {
 const (
 	ValidExpectedRequestSingleTag = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}}}}}}"}`
 	ValidQuerySingleTag           = "query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}}}}}}"
-	ValidExpectedRequestNoTag 	  = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field}}}}}}}"}`
-	ValidQueryNoTag           	  = "query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field}}}}}}}"
+	ValidExpectedRequestNoTag     = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field}}}}}}}"}`
+	ValidQueryNoTag               = "query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field}}}}}}}"
+	ValidExpectedRequestOtherTag  = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nname\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}}}}}}"}`
+	ValidQueryOtherTag            = "query {\nallRouters(name:\"ComboEast\"){\nnodes{\nname\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}}}}}}"
 	InvalidRouterExpectedRequest  = `{"query":"query {\nallRouters(name:\"not-a-router\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}}}}}}"}`
 	InvalidRouterQuery            = "query {\nallRouters(name:\"not-a-router\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}}}}}}"
 	InvalidFieldExpectedRequest   = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ninvalid-field\ntest-tag}}}}}}}"}`
@@ -38,30 +40,42 @@ var CollectorTestCases = []struct {
 	EntryPoint      string
 	Fields          map[string]string
 	Tags            map[string]string
+	OtherTags       map[string]string
+	InitError       bool
 	Query           string
 	Endpoint        Endpoint
 	ExpectedMetrics []*testutil.Metric
 	ExpectedErrors  []string
 }{
 	{
-		Name:            "missing entry-point produces no request or metrics",
-		EntryPoint:      "",
-		Fields:          nil,
-		Tags:            nil,
-		Query:           "",
-		Endpoint:        Endpoint{},
-		ExpectedMetrics: nil,
-		ExpectedErrors:  nil,
+		Name:       "missing entry-point produces no request or metrics",
+		EntryPoint: "",
+		Fields:     nil,
+		Tags:       nil,
+		InitError:  true,
 	},
 	{
-		Name:            "missing extract-fields produces no request or metrics",
-		EntryPoint:      "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
-		Fields:          nil,
-		Tags:            nil,
-		Query:           "",
-		Endpoint:        Endpoint{},
-		ExpectedMetrics: nil,
-		ExpectedErrors:  nil,
+		Name:       "missing extract-fields produces no request or metrics",
+		EntryPoint: "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
+		Fields:     nil,
+		Tags:       nil,
+		InitError:  true,
+	},
+	{
+		Name:       "other-tag with invalid path produces no request or metrics",
+		EntryPoint: "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
+		Fields:     map[string]string{"test-field": "test-field"},
+		Tags:       map[string]string{"test-tag": "test-tag"},
+		OtherTags:  map[string]string{"test-other-tag": "allServices/nodes/name"},
+		InitError:  true,
+	},
+	{
+		Name:       "other-tag with graphQL argument produces no request or metrics",
+		EntryPoint: "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
+		Fields:     map[string]string{"test-field": "test-field"},
+		Tags:       map[string]string{"test-tag": "test-tag"},
+		OtherTags:  map[string]string{"test-other-tag": "allRouters(name:'ComboEast')/nodes/name"},
+		InitError:  true,
 	},
 	{
 		Name:            "empty response produces error",
@@ -118,11 +132,11 @@ var CollectorTestCases = []struct {
 		ExpectedErrors:  []string{"unexpected response for collector test-collector: Cannot query field \"invalid-field\" on type \"ArpEntryType\"."},
 	},
 	{
-		Name:            "missing extract-tags produces response",
-		EntryPoint:      "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
-		Fields:          map[string]string{"test-field": "test-field"},
-		Tags:            nil,
-		Query:           ValidQueryNoTag,
+		Name:       "missing extract-tags produces response",
+		EntryPoint: "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
+		Fields:     map[string]string{"test-field": "test-field"},
+		Tags:       nil,
+		Query:      ValidQueryNoTag,
 		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestNoTag, `{
 			"data": {
 				"allRouters": {
@@ -147,10 +161,10 @@ var CollectorTestCases = []struct {
 				Fields:      map[string]interface{}{"test-field": 128.0},
 			},
 		},
-		ExpectedErrors:  nil,
+		ExpectedErrors: nil,
 	},
 	{
-		Name:       "full config produces response", //complex processing tested separately
+		Name:       "missing other-tags produces response", //complex processing tested separately
 		EntryPoint: "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
 		Fields:     map[string]string{"test-field": "test-field"},
 		Tags:       map[string]string{"test-tag": "test-tag"},
@@ -182,6 +196,44 @@ var CollectorTestCases = []struct {
 		},
 		ExpectedErrors: nil,
 	},
+	{
+		Name:       "full config produces response", //complex processing tested separately
+		EntryPoint: "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
+		Fields:     map[string]string{"test-field": "test-field"},
+		Tags:       map[string]string{"test-tag": "test-tag"},
+		OtherTags:  map[string]string{"test-other-tag": "allRouters/nodes/name"},
+		Query:      ValidQueryOtherTag,
+		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestOtherTag, `{
+			"data": {
+				"allRouters": {
+				  	"nodes": [{
+						"name": "ComboEast",
+					  	"nodes": {
+							"nodes": [{
+								"arp": {
+							  		"nodes": [{
+								  		"test-field": 128,
+								  		"test-tag": "test-string-1"
+									}]
+								}
+						  	}]
+					  	}
+					}]
+				}
+			}
+		}`},
+		ExpectedMetrics: []*testutil.Metric{
+			{
+				Measurement: "test-collector",
+				Tags: map[string]string{
+					"test-tag":       "test-string-1",
+					"test-other-tag": "ComboEast",
+				},
+				Fields: map[string]interface{}{"test-field": 128.0},
+			},
+		},
+		ExpectedErrors: nil,
+	},
 }
 
 func TestT128GraphqlCollector(t *testing.T) {
@@ -196,11 +248,12 @@ func TestT128GraphqlCollector(t *testing.T) {
 				EntryPoint:    testCase.EntryPoint,
 				Fields:        testCase.Fields,
 				Tags:          testCase.Tags,
+				OtherTags:     testCase.OtherTags,
 			}
 
 			var acc testutil.Accumulator
 
-			if (plugin.EntryPoint == "" || plugin.Fields == nil) {
+			if testCase.InitError {
 				require.Error(t, plugin.Init())
 				return
 			} else {
