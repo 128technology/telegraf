@@ -57,21 +57,21 @@ func (plugin *T128GraphQL) Init() error {
 		return err
 	}
 
-	fieldsWithPartialPath, fieldsWithAbsPath, err := validateAndSeparateData(plugin.Fields, plugin.EntryPoint)
+	fieldsWithRelPath, fieldsWithAbsPath, err := validateAndSeparatePaths(plugin.Fields, plugin.EntryPoint)
 	if err != nil {
 		return err
 	}
 
-	tagsWithPartialPath, tagsWithAbsPath, err := validateAndSeparateData(plugin.Tags, plugin.EntryPoint)
+	tagsWithRelPath, tagsWithAbsPath, err := validateAndSeparatePaths(plugin.Tags, plugin.EntryPoint)
 	if err != nil {
 		return err
 	}
 
 	plugin.Config = LoadConfig(
 		plugin.EntryPoint,
-		fieldsWithPartialPath,
+		fieldsWithRelPath,
 		fieldsWithAbsPath,
-		tagsWithPartialPath,
+		tagsWithRelPath,
 		tagsWithAbsPath,
 	)
 
@@ -238,10 +238,10 @@ func decodeAndReportJSONErrors(response []byte, template string) []error {
 	return errors
 }
 
-func validateAndSeparateData(data map[string]string, entryPoint string) (map[string]string, map[string]string, error) {
+func validateAndSeparatePaths(data map[string]string, entryPoint string) (map[string]string, map[string]string, error) {
 	predicateRegex := regexp.MustCompile(`\(.*?\)`)
 	cleanEntryPoint := predicateRegex.ReplaceAllString(entryPoint, "")
-	dataWithPartialPath := make(map[string]string)
+	dataWithRelPath := make(map[string]string)
 	dataWithAbsPath := make(map[string]string)
 
 	for name, path := range data {
@@ -256,14 +256,14 @@ func validateAndSeparateData(data map[string]string, entryPoint string) (map[str
 		}
 
 		if !strings.HasPrefix(cleanEntryPoint, pathToLeaf) {
-			dataWithPartialPath[name] = path
+			dataWithRelPath[name] = path
 			continue
 		}
 
 		dataWithAbsPath[name] = path
 	}
 
-	return dataWithPartialPath, dataWithAbsPath, nil
+	return dataWithRelPath, dataWithAbsPath, nil
 }
 
 func init() {

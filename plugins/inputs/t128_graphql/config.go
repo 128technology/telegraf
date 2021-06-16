@@ -34,9 +34,9 @@ Example:
 */
 func LoadConfig(
 	entryPoint string,
-	fieldsWithPartialPath map[string]string,
+	fieldsWithRelPath map[string]string,
 	fieldsWithAbsPath map[string]string,
-	tagsWithPartialPath map[string]string,
+	tagsWithRelPath map[string]string,
 	tagsWithAbsPath map[string]string,
 ) *Config {
 	config := &Config{}
@@ -57,9 +57,9 @@ func LoadConfig(
 	}
 
 	config.Predicates = predicates
-	config.Fields = formatPaths(fieldsWithPartialPath, path)
+	config.Fields = formatPaths(fieldsWithRelPath, path)
 	addDataWithAbsPath(config.Fields, fieldsWithAbsPath)
-	config.Tags = formatPaths(tagsWithPartialPath, path)
+	config.Tags = formatPaths(tagsWithRelPath, path)
 	addDataWithAbsPath(config.Tags, tagsWithAbsPath)
 
 	return config
