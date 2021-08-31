@@ -25,7 +25,8 @@ type Condition struct {
 type T128Filter struct {
 	Conditions []Condition `toml:"condition"`
 
-	Log telegraf.Logger `toml:"-"`
+	log     telegraf.Logger `toml:"-"`
+	matcher matcher         `toml:"-"`
 }
 
 func (r *T128Filter) SampleConfig() string {
@@ -36,11 +37,72 @@ func (r *T128Filter) Description() string {
 	return "Filter metrics from being emitted."
 }
 
+type matcher interface {
+	Matches(telegraf.Metric) bool
+}
+
+type exactMatcher struct {
+	tag    string
+	values []string
+}
+
+func (m exactMatcher) Matches(point telegraf.Metric) bool {
+	value, ok := point.GetTag(m.tag)
+	if !ok {
+		return false
+	}
+
+	for _, expectedValue := range m.values {
+		if value == expectedValue {
+			return true
+		}
+	}
+
+	return false
+}
+
+type andConjMatcher struct {
+	matchers []matcher
+}
+
+func (c andConjMatcher) Matches(point telegraf.Metric) bool {
+	for _, matcher := range c.matchers {
+		if !matcher.Matches(point) {
+			return false
+		}
+	}
+
+	return true
+}
+
+func createMatcher(conditions []Condition) (matcher, error) {
+	conditionMatchers := make([]matcher, len(conditions))
+	for i, condition := range conditions {
+		tagMatchers := getTagMatchers(condition.Tags)
+
+		conditionMatchers[i] = andConjMatcher{matchers: tagMatchers}
+	}
+
+	return andConjMatcher{conditionMatchers}, nil
+}
+
+func getTagMatchers(tags tags) []matcher {
+	tagMatchers := make([]matcher, len(tags))
+
+	j := 0
+	for tagKey, tagValues := range tags {
+		tagMatchers[j] = exactMatcher{tag: tagKey, values: tagValues}
+		j++
+	}
+
+	return tagMatchers
+}
+
 func (r *T128Filter) Apply(in ...telegraf.Metric) []telegraf.Metric {
 	filteredPoints := make([]telegraf.Metric, 0)
 
 	for _, point := range in {
-		if doAllConditionsMatch(r.Conditions, point) {
+		if r.matcher.Matches(point) {
 			filteredPoints = append(filteredPoints, point)
 		}
 	}
@@ -48,61 +110,10 @@ func (r *T128Filter) Apply(in ...telegraf.Metric) []telegraf.Metric {
 	return filteredPoints
 }
 
-func doAllConditionsMatch(conditions []Condition, point telegraf.Metric) bool {
-	conditionMatches := make([]bool, len(conditions))
-	for i, condition := range conditions {
-		conditionMatches[i] = doTagsMatch(condition.Tags, point)
-	}
-	return and(conditionMatches)
-}
-
-func doTagsMatch(tags tags, point telegraf.Metric) bool {
-	keyMatches := make([]bool, len(tags))
-	i := 0
-	for key, acceptableValues := range tags {
-		keyMatches[i] = doesKeyMatch(key, acceptableValues, point)
-		i++
-	}
-
-	return and(keyMatches)
-}
-
-func doesKeyMatch(key string, acceptableValues []string, point telegraf.Metric) bool {
-	actualValue, wasSet := point.GetTag(key)
-
-	return wasSet && or(applyBooleanFunc(acceptableValues, func(acceptableValue string) bool {
-		return acceptableValue == actualValue
-	}))
-}
-
-func applyBooleanFunc(items []string, application func(string) bool) []bool {
-	bools := make([]bool, len(items))
-	for i, item := range items {
-		bools[i] = application(item)
-	}
-	return bools
-}
-
-func and(bools []bool) bool {
-	for _, b := range bools {
-		if !b {
-			return false
-		}
-	}
-	return true
-}
-
-func or(bools []bool) bool {
-	for _, b := range bools {
-		if b {
-			return true
-		}
-	}
-	return false
-}
-
 func (r *T128Filter) Init() error {
-	return nil
+	var err error
+	r.matcher, err = createMatcher(r.Conditions)
+	return err
 }
 
 func newFilter() *T128Filter {

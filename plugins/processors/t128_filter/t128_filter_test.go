@@ -24,7 +24,7 @@ func newMetric(name string, tags map[string]string, fields map[string]interface{
 	return m
 }
 
-func TestRemoveOriginalAndRename(t *testing.T) {
+func TestFilters(t *testing.T) {
 	testCases := []struct {
 		Name          string
 		Conditions    []Condition
@@ -95,7 +95,7 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 
 			r := newFilter()
 			r.Conditions = testCase.Conditions
-			r.Log = testutil.Logger{}
+			r.log = testutil.Logger{}
 			assert.Nil(t, r.Init())
 
 			result := r.Apply(testCase.InputMetrics...)
