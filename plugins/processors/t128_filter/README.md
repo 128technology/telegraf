@@ -45,7 +45,7 @@ Multiple keys are AND'd together.
   [[processors.t128_filter.condition]]
 
   [processors.t128_filter.condition.tags]
-    tag1 = ["value1""]
+    tag1 = ["value1"]
     tag2 - ["value2"]
 ```
 
