@@ -58,7 +58,7 @@ measurement tag1=value1,tag2=value2 1612214810000000000
 
 ### Multiple Conditions Example Filter:
 
-Multiple conditions are AND'd together. The following example is functionally equivalent to the `Multiple Keys Example Filter`.
+Multiple conditions are OR'd together.
 
 ```toml
 [[processors.t128_filter]]
@@ -70,5 +70,11 @@ Multiple conditions are AND'd together. The following example is functionally eq
   [[processors.t128_filter.condition]]
 
   [processors.t128_filter.condition.tags]
-    tag2 = ["value2"]
+    tag1 = ["value2"]
+```
+
+```diff
+measurement tag1=value1 1612214810000000000
+measurement tag1=value2 1612214810000000000
+- measurement tag1=value3 1612214810000000000
 ```

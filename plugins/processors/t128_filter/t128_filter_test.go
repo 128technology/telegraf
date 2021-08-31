@@ -32,10 +32,10 @@ func TestFilters(t *testing.T) {
 		OutputMetrics []telegraf.Metric
 	}{
 		{
-			Name:          "passes through with no conditions",
+			Name:          "drops with no conditions",
 			Conditions:    []Condition{},
 			InputMetrics:  []telegraf.Metric{newMetric("some-measurement", nil, nil)},
-			OutputMetrics: []telegraf.Metric{newMetric("some-measurement", nil, nil)},
+			OutputMetrics: []telegraf.Metric{},
 		},
 		{
 			Name:       "drops",
@@ -55,17 +55,20 @@ func TestFilters(t *testing.T) {
 			OutputMetrics: []telegraf.Metric{},
 		},
 		{
-			Name:       "ands conditions together",
-			Conditions: []Condition{{Tags: tags{"tag1": {"value1"}}}, {Tags: tags{"tag2": {"value2"}}}},
+			Name:       "ors conditions together",
+			Conditions: []Condition{{Tags: tags{"tag1": {"value1"}}}, {Tags: tags{"tag1": {"value2"}}}},
 			InputMetrics: []telegraf.Metric{
-				newMetric("some-measurement", map[string]string{"tag1": "value1", "tag2": "value2"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "value1", "tag2": "value1"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "value2", "tag2": "value2"}, nil),
+				newMetric("some-measurement", map[string]string{"tag1": "value1"}, nil),
+				newMetric("some-measurement", map[string]string{"tag1": "value2"}, nil),
+				newMetric("some-measurement", map[string]string{"tag1": "value3"}, nil),
 			},
-			OutputMetrics: []telegraf.Metric{newMetric("some-measurement", map[string]string{"tag1": "value1", "tag2": "value2"}, nil)},
+			OutputMetrics: []telegraf.Metric{
+				newMetric("some-measurement", map[string]string{"tag1": "value1"}, nil),
+				newMetric("some-measurement", map[string]string{"tag1": "value2"}, nil),
+			},
 		},
 		{
-			Name:       "ands subconditions together",
+			Name:       "ands tags together",
 			Conditions: []Condition{{Tags: tags{"tag1": {"value1"}, "tag2": {"value2"}}}},
 			InputMetrics: []telegraf.Metric{
 				newMetric("some-measurement", map[string]string{"tag1": "value1", "tag2": "value2"}, nil),
@@ -113,8 +116,27 @@ func TestLoadsFromToml(t *testing.T) {
 
 		[condition.tags]
 		  tag1 = ["value1", "value2"]
+
+		[[condition]]
+
+		[condition.tags]
+		  tag1 = ["value3"]
 	`)
 
 	assert.NoError(t, toml.Unmarshal(exampleConfig, plugin))
-	assert.Equal(t, []Condition{{Tags: tags{"tag1": {"value1", "value2"}}}}, plugin.Conditions)
+	assert.Equal(t, []Condition{{Tags: tags{"tag1": {"value1", "value2"}}}, {Tags: tags{"tag1": {"value3"}}}}, plugin.Conditions)
+}
+
+func TestLoadsFromTomlComplainsAboutDuplicateTags(t *testing.T) {
+
+	plugin := &T128Filter{}
+	exampleConfig := []byte(`
+		[[condition]]
+
+		[condition.tags]
+		  tag1 = ["value1", "value2"]
+		  tag1 = ["value3"]
+	`)
+
+	assert.Error(t, toml.Unmarshal(exampleConfig, plugin))
 }

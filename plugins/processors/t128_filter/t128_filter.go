@@ -14,6 +14,11 @@ const sampleConfig = `
   [processors.t128_filter.condition.tags]
      #tag1 = ["value1", "value2"]
 	 #tag2 = ["value3"]
+
+  [[processors.t128_filter.condition]]
+
+  [processors.t128_filter.condition.tags]
+     #tag1 = ["value3"]
 `
 
 type tags map[string][]string
@@ -75,6 +80,20 @@ func (c andConjMatcher) Matches(point telegraf.Metric) bool {
 	return true
 }
 
+type orConjMatcher struct {
+	matchers []matcher
+}
+
+func (c orConjMatcher) Matches(point telegraf.Metric) bool {
+	for _, matcher := range c.matchers {
+		if matcher.Matches(point) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func createMatcher(conditions []Condition) (matcher, error) {
 	conditionMatchers := make([]matcher, len(conditions))
 	for i, condition := range conditions {
@@ -83,7 +102,7 @@ func createMatcher(conditions []Condition) (matcher, error) {
 		conditionMatchers[i] = andConjMatcher{matchers: tagMatchers}
 	}
 
-	return andConjMatcher{conditionMatchers}, nil
+	return orConjMatcher{conditionMatchers}, nil
 }
 
 func getTagMatchers(tags tags) []matcher {
