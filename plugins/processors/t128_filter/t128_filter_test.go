@@ -149,6 +149,10 @@ func TestValidation(t *testing.T) {
 			Name:       "needs valid glob",
 			Conditions: []Condition{{Mode: GLOB_MODE, Tags: tags{"tag1": {"invalid[glob"}}}},
 		},
+		{
+			Name:       "invalid mode",
+			Conditions: []Condition{{Mode: "some-invalid-mode", Tags: tags{"tag1": {"just needed a tag"}}}},
+		},
 	}
 
 	for _, testCase := range testCases {

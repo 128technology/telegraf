@@ -14,15 +14,22 @@ const sampleConfig = `
   ## The conditions that must be met to pass a metric through. This is similar
   ## behavior to a tagpass, but the multiple tags are ANDed
   [[processors.t128_filter.condition]]
+    ## Mode dictates how to match the condition's tag values
+	## Valid values are:
+	##  * "exact": exact string comparison
+	##  * "glob": go flavored glob comparison (see https://github.com/gobwas/glob)
+	##  * "regex": go flavored regex comparison
+    # mode = "exact"
 
   [processors.t128_filter.condition.tags]
-     #tag1 = ["value1", "value2"]
-	 #tag2 = ["value3"]
+     # tag1 = ["value1", "value2"]
+	 # tag2 = ["value3"]
 
   [[processors.t128_filter.condition]]
+	# mode = "exact"
 
   [processors.t128_filter.condition.tags]
-     #tag1 = ["value3"]
+     # tag1 = ["value3"]
 `
 
 type tags map[string][]string
@@ -198,6 +205,7 @@ func getTagMatcher(mode mode, tag string, values []string) (matcher, error) {
 		return globMatcher{tag, globs}, nil
 	}
 
+	fmt.Println("hi")
 	return nil, fmt.Errorf("invalid mode: %s", mode)
 }
 
