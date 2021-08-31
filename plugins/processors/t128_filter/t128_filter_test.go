@@ -90,6 +90,34 @@ func TestFilters(t *testing.T) {
 				newMetric("some-measurement", map[string]string{"tag1": "value2"}, nil),
 			},
 		},
+		{
+			Name:       "regex matches whole tag values",
+			Conditions: []Condition{{Mode: REGEX_MODE, Tags: tags{"tag1": {"234.*"}}}},
+			InputMetrics: []telegraf.Metric{
+				newMetric("some-measurement", map[string]string{"tag1": "12345"}, nil),
+				newMetric("some-measurement", map[string]string{"tag1": "something-else"}, nil),
+				newMetric("some-measurement", map[string]string{"tag1": "23456"}, nil),
+				newMetric("some-measurement", map[string]string{"tag1": "234"}, nil),
+			},
+			OutputMetrics: []telegraf.Metric{
+				newMetric("some-measurement", map[string]string{"tag1": "23456"}, nil),
+				newMetric("some-measurement", map[string]string{"tag1": "234"}, nil),
+			},
+		},
+		{
+			Name:       "glob matches whole tag values",
+			Conditions: []Condition{{Mode: GLOB_MODE, Tags: tags{"tag1": {"234*"}}}},
+			InputMetrics: []telegraf.Metric{
+				newMetric("some-measurement", map[string]string{"tag1": "12345"}, nil),
+				newMetric("some-measurement", map[string]string{"tag1": "something-else"}, nil),
+				newMetric("some-measurement", map[string]string{"tag1": "23456"}, nil),
+				newMetric("some-measurement", map[string]string{"tag1": "234"}, nil),
+			},
+			OutputMetrics: []telegraf.Metric{
+				newMetric("some-measurement", map[string]string{"tag1": "23456"}, nil),
+				newMetric("some-measurement", map[string]string{"tag1": "234"}, nil),
+			},
+		},
 	}
 
 	for _, testCase := range testCases {
@@ -104,6 +132,31 @@ func TestFilters(t *testing.T) {
 			result := r.Apply(testCase.InputMetrics...)
 
 			assert.Equal(t, testCase.OutputMetrics, result)
+		})
+	}
+}
+
+func TestValidation(t *testing.T) {
+	testCases := []struct {
+		Name       string
+		Conditions []Condition
+	}{
+		{
+			Name:       "needs valid regex",
+			Conditions: []Condition{{Mode: REGEX_MODE, Tags: tags{"tag1": {"invalid(regex"}}}},
+		},
+		{
+			Name:       "needs valid glob",
+			Conditions: []Condition{{Mode: GLOB_MODE, Tags: tags{"tag1": {"invalid[glob"}}}},
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.Name, func(t *testing.T) {
+			r := newFilter()
+			r.Conditions = testCase.Conditions
+			r.log = testutil.Logger{}
+			assert.NotNil(t, r.Init())
 		})
 	}
 }
