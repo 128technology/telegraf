@@ -10,7 +10,9 @@ The `t128_filter` filters out metrics passing through it. This processor is usef
 [[processors.t128_filter]]
   ## The conditions that must be met to pass a metric through. This is similar
   ## behavior to a tagpass, but multiple tags are ANDed
-  [[processors.t128_filter.conditions]]
+  [[processors.t128_filter.condition]]
+
+  [processors.t128_filter.condition.tags]
      #tag1 = ["value1", "value2"]
      #tag2 = ["value3"]
 ```
@@ -21,7 +23,9 @@ Multiple values for a specific tag are OR'd together. A metric without a tag is 
 
 ```toml
 [[processors.t128_filter]]
-  [[processors.t128_filter.conditions]]
+  [[processors.t128_filter.condition]]
+
+  [processors.t128_filter.condition.tags]
     tag1 = ["value1", "value2"]
 ```
 
@@ -38,7 +42,9 @@ Multiple keys are AND'd together.
 
 ```toml
 [[processors.t128_filter]]
-  [[processors.t128_filter.conditions]]
+  [[processors.t128_filter.condition]]
+
+  [processors.t128_filter.condition.tags]
     tag1 = ["value1""]
     tag2 - ["value2"]
 ```
@@ -52,13 +58,17 @@ measurement tag1=value1,tag2=value2 1612214810000000000
 
 ### Multiple Conditions Example Filter:
 
-Multiple conditions are AND'd together. The following example is functionally equivalent to the `Multiple Keys Filter`.
+Multiple conditions are AND'd together. The following example is functionally equivalent to the `Multiple Keys Example Filter`.
 
 ```toml
 [[processors.t128_filter]]
-  [[processors.t128_filter.conditions]]
+  [[processors.t128_filter.condition]]
+
+  [processors.t128_filter.condition.tags]
     tag1 = ["value1"]
 
-  [[processors.t128_filter.conditions]]
+  [[processors.t128_filter.condition]]
+
+  [processors.t128_filter.condition.tags]
     tag2 = ["value2"]
 ```

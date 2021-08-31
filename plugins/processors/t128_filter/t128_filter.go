@@ -9,15 +9,21 @@ const sampleConfig = `
 [[processors.t128_filter]]
   ## The conditions that must be met to pass a metric through. This is similar
   ## behavior to a tagpass, but the multiple tags are ANDed
-  [processors.t128_filter.conditions]
+  [[processors.t128_filter.condition]]
+
+  [processors.t128_filter.condition.tags]
      #tag1 = ["value1", "value2"]
 	 #tag2 = ["value3"]
 `
 
-type conditionSet map[string][]string
+type tags map[string][]string
+
+type Condition struct {
+	Tags tags `toml:"tags"`
+}
 
 type T128Filter struct {
-	Conditions []conditionSet `toml:"conditions"`
+	Conditions []Condition `toml:"condition"`
 
 	Log telegraf.Logger `toml:"-"`
 }
@@ -34,7 +40,7 @@ func (r *T128Filter) Apply(in ...telegraf.Metric) []telegraf.Metric {
 	filteredPoints := make([]telegraf.Metric, 0)
 
 	for _, point := range in {
-		if doAllConditionSetsMatch(r.Conditions, point) {
+		if doAllConditionsMatch(r.Conditions, point) {
 			filteredPoints = append(filteredPoints, point)
 		}
 	}
@@ -42,18 +48,18 @@ func (r *T128Filter) Apply(in ...telegraf.Metric) []telegraf.Metric {
 	return filteredPoints
 }
 
-func doAllConditionSetsMatch(conditionSets []conditionSet, point telegraf.Metric) bool {
-	conditionSetMatches := make([]bool, len(conditionSets))
-	for i, conditionSet := range conditionSets {
-		conditionSetMatches[i] = doesConditionSetMatch(conditionSet, point)
+func doAllConditionsMatch(conditions []Condition, point telegraf.Metric) bool {
+	conditionMatches := make([]bool, len(conditions))
+	for i, condition := range conditions {
+		conditionMatches[i] = doTagsMatch(condition.Tags, point)
 	}
-	return and(conditionSetMatches)
+	return and(conditionMatches)
 }
 
-func doesConditionSetMatch(conditionSet conditionSet, point telegraf.Metric) bool {
-	keyMatches := make([]bool, len(conditionSet))
+func doTagsMatch(tags tags, point telegraf.Metric) bool {
+	keyMatches := make([]bool, len(tags))
 	i := 0
-	for key, acceptableValues := range conditionSet {
+	for key, acceptableValues := range tags {
 		keyMatches[i] = doesKeyMatch(key, acceptableValues, point)
 		i++
 	}
@@ -101,7 +107,7 @@ func (r *T128Filter) Init() error {
 
 func newFilter() *T128Filter {
 	return &T128Filter{
-		Conditions: make([]conditionSet, 0),
+		Conditions: make([]Condition, 0),
 	}
 }
 

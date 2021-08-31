@@ -27,19 +27,19 @@ func newMetric(name string, tags map[string]string, fields map[string]interface{
 func TestRemoveOriginalAndRename(t *testing.T) {
 	testCases := []struct {
 		Name          string
-		Conditions    []conditionSet
+		Conditions    []Condition
 		InputMetrics  []telegraf.Metric
 		OutputMetrics []telegraf.Metric
 	}{
 		{
 			Name:          "passes through with no conditions",
-			Conditions:    []conditionSet{},
+			Conditions:    []Condition{},
 			InputMetrics:  []telegraf.Metric{newMetric("some-measurement", nil, nil)},
 			OutputMetrics: []telegraf.Metric{newMetric("some-measurement", nil, nil)},
 		},
 		{
 			Name:       "drops",
-			Conditions: []conditionSet{conditionSet{"tag1": {"value1"}}},
+			Conditions: []Condition{{Tags: tags{"tag1": {"value1"}}}},
 			InputMetrics: []telegraf.Metric{
 				newMetric("some-measurement", map[string]string{"tag1": "value1"}, nil),
 				newMetric("some-measurement", map[string]string{"tag1": "value2"}, nil),
@@ -48,7 +48,7 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 		},
 		{
 			Name:       "drops if no tag",
-			Conditions: []conditionSet{conditionSet{"tag1": {"value1"}}},
+			Conditions: []Condition{{Tags: tags{"tag1": {"value1"}}}},
 			InputMetrics: []telegraf.Metric{
 				newMetric("some-measurement", nil, nil),
 			},
@@ -56,7 +56,7 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 		},
 		{
 			Name:       "ands conditions together",
-			Conditions: []conditionSet{conditionSet{"tag1": {"value1"}}, conditionSet{"tag2": {"value2"}}},
+			Conditions: []Condition{{Tags: tags{"tag1": {"value1"}}}, {Tags: tags{"tag2": {"value2"}}}},
 			InputMetrics: []telegraf.Metric{
 				newMetric("some-measurement", map[string]string{"tag1": "value1", "tag2": "value2"}, nil),
 				newMetric("some-measurement", map[string]string{"tag1": "value1", "tag2": "value1"}, nil),
@@ -66,7 +66,7 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 		},
 		{
 			Name:       "ands subconditions together",
-			Conditions: []conditionSet{conditionSet{"tag1": {"value1"}, "tag2": {"value2"}}},
+			Conditions: []Condition{{Tags: tags{"tag1": {"value1"}, "tag2": {"value2"}}}},
 			InputMetrics: []telegraf.Metric{
 				newMetric("some-measurement", map[string]string{"tag1": "value1", "tag2": "value2"}, nil),
 				newMetric("some-measurement", map[string]string{"tag1": "value1", "tag2": "value1"}, nil),
@@ -76,7 +76,7 @@ func TestRemoveOriginalAndRename(t *testing.T) {
 		},
 		{
 			Name:       "ors multiple values",
-			Conditions: []conditionSet{conditionSet{"tag1": {"value1", "value2"}}},
+			Conditions: []Condition{{Tags: tags{"tag1": {"value1", "value2"}}}},
 			InputMetrics: []telegraf.Metric{
 				newMetric("some-measurement", map[string]string{"tag1": "value1"}, nil),
 				newMetric("some-measurement", map[string]string{"tag1": "value2"}, nil),
@@ -109,10 +109,12 @@ func TestLoadsFromToml(t *testing.T) {
 
 	plugin := &T128Filter{}
 	exampleConfig := []byte(`
-		[[conditions]]
+		[[condition]]
+
+		[condition.tags]
 		  tag1 = ["value1", "value2"]
 	`)
 
 	assert.NoError(t, toml.Unmarshal(exampleConfig, plugin))
-	assert.Equal(t, []conditionSet{{"tag1": {"value1", "value2"}}}, plugin.Conditions)
+	assert.Equal(t, []Condition{{Tags: tags{"tag1": {"value1", "value2"}}}}, plugin.Conditions)
 }
