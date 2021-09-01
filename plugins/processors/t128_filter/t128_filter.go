@@ -280,15 +280,20 @@ func compileGlobs(values []string) ([]glob.Glob, error) {
 }
 
 func (r *T128Filter) Apply(in ...telegraf.Metric) []telegraf.Metric {
-	filteredPoints := make([]telegraf.Metric, 0)
-
 	for _, point := range in {
-		if r.matcher.Matches(point) {
-			filteredPoints = append(filteredPoints, point)
+		if !r.matcher.Matches(point) {
+			// copying so that don't hit seg fault
+			fields := make([]*telegraf.Field, len(point.FieldList()))
+			copy(fields, point.FieldList())
+
+			// removing all fields will have telegraf drop the metric
+			for _, field := range fields {
+				point.RemoveField(field.Key)
+			}
 		}
 	}
 
-	return filteredPoints
+	return in
 }
 
 func (r *T128Filter) Init() error {

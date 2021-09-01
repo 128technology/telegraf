@@ -24,123 +24,117 @@ func newMetric(name string, tags map[string]string, fields map[string]interface{
 	return m
 }
 
+func passedMetric(name string, tags map[string]string, fields map[string]interface{}) Metric {
+	return Metric{Metric: newMetric(name, tags, combineFields(map[string]interface{}{"at-least": "one-field"}, fields)), Dropped: false}
+}
+
+func droppedMetric(name string, tags map[string]string, fields map[string]interface{}) Metric {
+	return Metric{Metric: newMetric(name, tags, combineFields(map[string]interface{}{"at-least": "one-field"}, fields)), Dropped: true}
+}
+
+func combineFields(a, b map[string]interface{}) map[string]interface{} {
+	for k, v := range b {
+		a[k] = v
+	}
+
+	return a
+}
+
+type Metric struct {
+	telegraf.Metric
+	Dropped bool
+}
+
 func TestFilters(t *testing.T) {
 	testCases := []struct {
-		Name          string
-		Conditions    []Condition
-		InputMetrics  []telegraf.Metric
-		OutputMetrics []telegraf.Metric
+		Name         string
+		Conditions   []Condition
+		InputMetrics []Metric
 	}{
 		{
-			Name:          "drops with no conditions",
-			Conditions:    []Condition{},
-			InputMetrics:  []telegraf.Metric{newMetric("some-measurement", nil, nil)},
-			OutputMetrics: []telegraf.Metric{},
+			Name:         "drops with no conditions",
+			Conditions:   []Condition{},
+			InputMetrics: []Metric{droppedMetric("some-measurement", nil, nil)},
 		},
 		{
 			Name:       "drops",
 			Conditions: []Condition{{Tags: tags{"tag1": {"value1"}}}},
-			InputMetrics: []telegraf.Metric{
-				newMetric("some-measurement", map[string]string{"tag1": "value1"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "value2"}, nil),
+			InputMetrics: []Metric{
+				passedMetric("some-measurement", map[string]string{"tag1": "value1"}, nil),
+				droppedMetric("some-measurement", map[string]string{"tag1": "value2"}, nil),
 			},
-			OutputMetrics: []telegraf.Metric{newMetric("some-measurement", map[string]string{"tag1": "value1"}, nil)},
 		},
 		{
 			Name:       "drops if no tag",
 			Conditions: []Condition{{Tags: tags{"tag1": {"value1"}}}},
-			InputMetrics: []telegraf.Metric{
-				newMetric("some-measurement", nil, nil),
+			InputMetrics: []Metric{
+				droppedMetric("some-measurement", nil, nil),
 			},
-			OutputMetrics: []telegraf.Metric{},
 		},
 		{
 			Name:       "ors conditions together",
 			Conditions: []Condition{{Tags: tags{"tag1": {"value1"}}}, {Tags: tags{"tag1": {"value2"}}}},
-			InputMetrics: []telegraf.Metric{
-				newMetric("some-measurement", map[string]string{"tag1": "value1"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "value2"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "value3"}, nil),
-			},
-			OutputMetrics: []telegraf.Metric{
-				newMetric("some-measurement", map[string]string{"tag1": "value1"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "value2"}, nil),
+			InputMetrics: []Metric{
+				passedMetric("some-measurement", map[string]string{"tag1": "value1"}, nil),
+				passedMetric("some-measurement", map[string]string{"tag1": "value2"}, nil),
+				droppedMetric("some-measurement", map[string]string{"tag1": "value3"}, nil),
 			},
 		},
 		{
 			Name:       "ands tags together by default",
 			Conditions: []Condition{{Tags: tags{"tag1": {"value1"}, "tag2": {"value2"}}}},
-			InputMetrics: []telegraf.Metric{
-				newMetric("some-measurement", map[string]string{"tag1": "value1", "tag2": "value2"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "value1", "tag2": "value1"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "value2", "tag2": "value2"}, nil),
+			InputMetrics: []Metric{
+				passedMetric("some-measurement", map[string]string{"tag1": "value1", "tag2": "value2"}, nil),
+				droppedMetric("some-measurement", map[string]string{"tag1": "value1", "tag2": "value1"}, nil),
+				droppedMetric("some-measurement", map[string]string{"tag1": "value2", "tag2": "value2"}, nil),
 			},
-			OutputMetrics: []telegraf.Metric{newMetric("some-measurement", map[string]string{"tag1": "value1", "tag2": "value2"}, nil)},
 		},
 		{
 			Name:       "or operation ors tags together",
 			Conditions: []Condition{{Operation: orOperation, Tags: tags{"tag1": {"value1"}, "tag2": {"value2"}}}},
-			InputMetrics: []telegraf.Metric{
-				newMetric("some-measurement", map[string]string{"tag1": "value1", "tag2": "value2"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "value1", "tag2": "value1"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "value2", "tag2": "value2"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "value2", "tag2": "value1"}, nil),
-			},
-			OutputMetrics: []telegraf.Metric{
-				newMetric("some-measurement", map[string]string{"tag1": "value1", "tag2": "value2"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "value1", "tag2": "value1"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "value2", "tag2": "value2"}, nil),
+			InputMetrics: []Metric{
+				passedMetric("some-measurement", map[string]string{"tag1": "value1", "tag2": "value2"}, nil),
+				passedMetric("some-measurement", map[string]string{"tag1": "value1", "tag2": "value1"}, nil),
+				passedMetric("some-measurement", map[string]string{"tag1": "value2", "tag2": "value2"}, nil),
+				droppedMetric("some-measurement", map[string]string{"tag1": "value2", "tag2": "value1"}, nil),
 			},
 		},
 		{
 			Name:       "ors multiple values",
 			Conditions: []Condition{{Tags: tags{"tag1": {"value1", "value2"}}}},
-			InputMetrics: []telegraf.Metric{
-				newMetric("some-measurement", map[string]string{"tag1": "value1"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "value2"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "value3"}, nil),
-			},
-			OutputMetrics: []telegraf.Metric{
-				newMetric("some-measurement", map[string]string{"tag1": "value1"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "value2"}, nil),
+			InputMetrics: []Metric{
+				passedMetric("some-measurement", map[string]string{"tag1": "value1"}, nil),
+				passedMetric("some-measurement", map[string]string{"tag1": "value2"}, nil),
+				droppedMetric("some-measurement", map[string]string{"tag1": "value3"}, nil),
 			},
 		},
 		{
 			Name:       "regex matches whole tag values",
 			Conditions: []Condition{{Mode: regexMode, Tags: tags{"tag1": {"234.*"}}}},
-			InputMetrics: []telegraf.Metric{
-				newMetric("some-measurement", map[string]string{"tag1": "12345"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "something-else"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "23456"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "234"}, nil),
-			},
-			OutputMetrics: []telegraf.Metric{
-				newMetric("some-measurement", map[string]string{"tag1": "23456"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "234"}, nil),
+			InputMetrics: []Metric{
+				droppedMetric("some-measurement", map[string]string{"tag1": "12345"}, nil),
+				droppedMetric("some-measurement", map[string]string{"tag1": "something-else"}, nil),
+				passedMetric("some-measurement", map[string]string{"tag1": "23456"}, nil),
+				passedMetric("some-measurement", map[string]string{"tag1": "234"}, nil),
 			},
 		},
 		{
 			Name:       "glob matches whole tag values",
 			Conditions: []Condition{{Mode: globMode, Tags: tags{"tag1": {"234*"}}}},
-			InputMetrics: []telegraf.Metric{
-				newMetric("some-measurement", map[string]string{"tag1": "12345"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "something-else"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "23456"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "234"}, nil),
-			},
-			OutputMetrics: []telegraf.Metric{
-				newMetric("some-measurement", map[string]string{"tag1": "23456"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "234"}, nil),
+			InputMetrics: []Metric{
+				droppedMetric("some-measurement", map[string]string{"tag1": "12345"}, nil),
+				droppedMetric("some-measurement", map[string]string{"tag1": "something-else"}, nil),
+				passedMetric("some-measurement", map[string]string{"tag1": "23456"}, nil),
+				passedMetric("some-measurement", map[string]string{"tag1": "234"}, nil),
 			},
 		},
 		{
 			Name:       "inverts",
 			Conditions: []Condition{{Invert: true, Tags: tags{"tag1": {"value1"}}}},
-			InputMetrics: []telegraf.Metric{
-				newMetric("some-measurement", map[string]string{"tag1": "value1"}, nil),
-				newMetric("some-measurement", map[string]string{"tag1": "value2"}, nil),
+			InputMetrics: []Metric{
+				droppedMetric("some-measurement", map[string]string{"tag1": "value1"}, nil),
+				passedMetric("some-measurement", map[string]string{"tag1": "value2"}, nil),
 			},
-			OutputMetrics: []telegraf.Metric{newMetric("some-measurement", map[string]string{"tag1": "value2"}, nil)},
 		},
 	}
 
@@ -153,9 +147,19 @@ func TestFilters(t *testing.T) {
 			r.log = testutil.Logger{}
 			assert.Nil(t, r.Init())
 
-			result := r.Apply(testCase.InputMetrics...)
+			inputMetrics := make([]telegraf.Metric, len(testCase.InputMetrics))
+			for i, metric := range testCase.InputMetrics {
+				inputMetrics[i] = metric.Metric
+			}
 
-			assert.Equal(t, testCase.OutputMetrics, result)
+			result := r.Apply(inputMetrics...)
+
+			assert.NotNil(t, result)
+
+			for i, metric := range result {
+				actuallyDropped := len(metric.FieldList()) == 0
+				assert.Equal(t, testCase.InputMetrics[i].Dropped, actuallyDropped)
+			}
 		})
 	}
 }
