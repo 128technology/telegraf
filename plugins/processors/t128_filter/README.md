@@ -20,12 +20,12 @@ The `t128_filter` filters out metrics passing through it. This processor is usef
 
   [processors.t128_filter.condition.tags]
     # tag1 = ["value1", "value2"]
-	  # tag2 = ["value3"]
+    # tag2 = ["value3"]
 
   [[processors.t128_filter.condition]]
 
   [processors.t128_filter.condition.tags]
-     # tag1 = ["value3"]
+    # tag1 = ["value3"]
 ```
 
 ### Basic Example Filter:

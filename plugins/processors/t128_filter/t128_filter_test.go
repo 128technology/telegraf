@@ -92,7 +92,7 @@ func TestFilters(t *testing.T) {
 		},
 		{
 			Name:       "regex matches whole tag values",
-			Conditions: []Condition{{Mode: REGEX_MODE, Tags: tags{"tag1": {"234.*"}}}},
+			Conditions: []Condition{{Mode: regexMode, Tags: tags{"tag1": {"234.*"}}}},
 			InputMetrics: []telegraf.Metric{
 				newMetric("some-measurement", map[string]string{"tag1": "12345"}, nil),
 				newMetric("some-measurement", map[string]string{"tag1": "something-else"}, nil),
@@ -106,7 +106,7 @@ func TestFilters(t *testing.T) {
 		},
 		{
 			Name:       "glob matches whole tag values",
-			Conditions: []Condition{{Mode: GLOB_MODE, Tags: tags{"tag1": {"234*"}}}},
+			Conditions: []Condition{{Mode: globMode, Tags: tags{"tag1": {"234*"}}}},
 			InputMetrics: []telegraf.Metric{
 				newMetric("some-measurement", map[string]string{"tag1": "12345"}, nil),
 				newMetric("some-measurement", map[string]string{"tag1": "something-else"}, nil),
@@ -143,11 +143,11 @@ func TestValidation(t *testing.T) {
 	}{
 		{
 			Name:       "needs valid regex",
-			Conditions: []Condition{{Mode: REGEX_MODE, Tags: tags{"tag1": {"invalid(regex"}}}},
+			Conditions: []Condition{{Mode: regexMode, Tags: tags{"tag1": {"invalid(regex"}}}},
 		},
 		{
 			Name:       "needs valid glob",
-			Conditions: []Condition{{Mode: GLOB_MODE, Tags: tags{"tag1": {"invalid[glob"}}}},
+			Conditions: []Condition{{Mode: globMode, Tags: tags{"tag1": {"invalid[glob"}}}},
 		},
 		{
 			Name:       "invalid mode",
@@ -170,6 +170,7 @@ func TestLoadsFromToml(t *testing.T) {
 	plugin := &T128Filter{}
 	exampleConfig := []byte(`
 		[[condition]]
+		  mode = "glob"
 
 		[condition.tags]
 		  tag1 = ["value1", "value2"]
@@ -181,7 +182,7 @@ func TestLoadsFromToml(t *testing.T) {
 	`)
 
 	assert.NoError(t, toml.Unmarshal(exampleConfig, plugin))
-	assert.Equal(t, []Condition{{Tags: tags{"tag1": {"value1", "value2"}}}, {Tags: tags{"tag1": {"value3"}}}}, plugin.Conditions)
+	assert.Equal(t, []Condition{{Mode: globMode, Tags: tags{"tag1": {"value1", "value2"}}}, {Tags: tags{"tag1": {"value3"}}}}, plugin.Conditions)
 }
 
 func TestLoadsFromTomlComplainsAboutDuplicateTags(t *testing.T) {
