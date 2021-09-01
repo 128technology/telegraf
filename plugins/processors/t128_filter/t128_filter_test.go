@@ -190,6 +190,7 @@ func TestLoadsFromToml(t *testing.T) {
 	exampleConfig := []byte(`
 		[[condition]]
 		  mode = "glob"
+		  operation = "or"
 
 		[condition.tags]
 		  tag1 = ["value1", "value2"]
@@ -201,7 +202,7 @@ func TestLoadsFromToml(t *testing.T) {
 	`)
 
 	assert.NoError(t, toml.Unmarshal(exampleConfig, plugin))
-	assert.Equal(t, []Condition{{Mode: globMode, Tags: tags{"tag1": {"value1", "value2"}}}, {Tags: tags{"tag1": {"value3"}}}}, plugin.Conditions)
+	assert.Equal(t, []Condition{{Mode: globMode, Operation: orOperation, Tags: tags{"tag1": {"value1", "value2"}}}, {Tags: tags{"tag1": {"value3"}}}}, plugin.Conditions)
 }
 
 func TestLoadsFromTomlComplainsAboutDuplicateTags(t *testing.T) {
