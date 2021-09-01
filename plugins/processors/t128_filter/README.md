@@ -22,7 +22,7 @@ The `t128_filter` filters out metrics passing through it. This processor is usef
     ## Valid values are:
     ##  * "and": logical and the results together
     ##  * "or": logical or the results together
-    # mode = "and"
+    # operation = "and"
 
   [processors.t128_filter.condition.tags]
     # tag1 = ["value1", "value2"]

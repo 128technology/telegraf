@@ -22,10 +22,10 @@ const sampleConfig = `
 	# mode = "exact"
 
 	## Operation dictates how to combine the condition's tag matching
-    ## Valid values are:
-    ##  * "and": logical and the results together
-    ##  * "or": logical or the results together
-    # mode = "and"
+	## Valid values are:
+	##  * "and": logical and the results together
+	##  * "or": logical or the results together
+	# operation = "and"
 
   [processors.t128_filter.condition.tags]
 	# tag1 = ["value1", "value2"]
