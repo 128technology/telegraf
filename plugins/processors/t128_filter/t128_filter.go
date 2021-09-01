@@ -232,7 +232,7 @@ func getConditionMatcher(matchers []matcher, operation operation) (matcher, erro
 		return orConjMatcher{matchers: matchers}, nil
 	}
 
-	return nil, fmt.Errorf("invalid operations: %s", operation)
+	return nil, fmt.Errorf("invalid operation: %s", operation)
 }
 
 func compileExpressions(values []string) ([]*regexp.Regexp, error) {
