@@ -1,4 +1,4 @@
-package t128_filter
+package t128_pass
 
 import (
 	"testing"
@@ -45,7 +45,7 @@ type Metric struct {
 	Dropped bool
 }
 
-func TestFilters(t *testing.T) {
+func TestPass(t *testing.T) {
 	testCases := []struct {
 		Name         string
 		Conditions   []Condition
@@ -142,7 +142,7 @@ func TestFilters(t *testing.T) {
 		t.Run(testCase.Name, func(t *testing.T) {
 			assert.True(t, len(testCase.InputMetrics) > 0, "need at least one metric to process")
 
-			r := newFilter()
+			r := newPass()
 			r.Conditions = testCase.Conditions
 			r.log = testutil.Logger{}
 			assert.Nil(t, r.Init())
@@ -189,7 +189,7 @@ func TestValidation(t *testing.T) {
 
 	for _, testCase := range testCases {
 		t.Run(testCase.Name, func(t *testing.T) {
-			r := newFilter()
+			r := newPass()
 			r.Conditions = testCase.Conditions
 			r.log = testutil.Logger{}
 			assert.NotNil(t, r.Init())
@@ -199,7 +199,7 @@ func TestValidation(t *testing.T) {
 
 func TestLoadsFromToml(t *testing.T) {
 
-	plugin := &T128Filter{}
+	plugin := &T128Pass{}
 	exampleConfig := []byte(`
 		[[condition]]
 		  mode = "glob"
@@ -227,7 +227,7 @@ func TestLoadsFromToml(t *testing.T) {
 
 func TestLoadsFromTomlComplainsAboutDuplicateTags(t *testing.T) {
 
-	plugin := &T128Filter{}
+	plugin := &T128Pass{}
 	exampleConfig := []byte(`
 		[[condition]]
 
