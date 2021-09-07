@@ -204,12 +204,20 @@ func TestValidation(t *testing.T) {
 		Conditions []Condition
 	}{
 		{
-			Name:       "needs valid regex",
+			Name:       "needs valid tag regex",
 			Conditions: []Condition{{Mode: regexMode, Tags: leaves{"tag1": {"invalid(regex"}}}},
 		},
 		{
-			Name:       "needs valid glob",
+			Name:       "needs valid tag glob",
 			Conditions: []Condition{{Mode: globMode, Tags: leaves{"tag1": {"invalid[glob"}}}},
+		},
+		{
+			Name:       "needs valid field regex",
+			Conditions: []Condition{{Mode: regexMode, Fields: leaves{"tag1": {"invalid(regex"}}}},
+		},
+		{
+			Name:       "needs valid field glob",
+			Conditions: []Condition{{Mode: globMode, Fields: leaves{"tag1": {"invalid[glob"}}}},
 		},
 		{
 			Name:       "invalid mode",
@@ -243,6 +251,9 @@ func TestLoadsFromToml(t *testing.T) {
 		[condition.tags]
 		  tag1 = ["value1", "value2"]
 
+		[condition.fields]
+		  field1 = ["value1", "value2"]
+
 		[[condition]]
 
 		[condition.tags]
@@ -251,11 +262,18 @@ func TestLoadsFromToml(t *testing.T) {
 
 	assert.NoError(t, toml.Unmarshal(exampleConfig, plugin))
 	assert.Equal(t,
-		[]Condition{{
-			Mode:      globMode,
-			Operation: orOperation,
-			Invert:    true,
-			Tags:      leaves{"tag1": {"value1", "value2"}}}, {Tags: leaves{"tag1": {"value3"}}}},
+		[]Condition{
+			{
+				Mode:      globMode,
+				Operation: orOperation,
+				Invert:    true,
+				Tags:      leaves{"tag1": {"value1", "value2"}},
+				Fields:    leaves{"field1": {"value1", "value2"}},
+			},
+			{
+				Tags: leaves{"tag1": {"value3"}},
+			},
+		},
 		plugin.Conditions)
 }
 
