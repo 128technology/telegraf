@@ -27,6 +27,9 @@ The `t128_filter` filters out metrics passing through it. This processor is usef
     ## Invert dictates whether to invert the final result of the condition
     # invert = false
 
+    ## Whether to ignore if any tag or field keys are missing.
+    # ignore_missing_keys = false
+
   [processors.t128_filter.condition.tags]
     # tag1 = ["value1", "value2"]
     # tag2 = ["value3"]

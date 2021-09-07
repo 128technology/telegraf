@@ -72,6 +72,13 @@ func TestPass(t *testing.T) {
 			},
 		},
 		{
+			Name:       "drops if no tag overriden by config",
+			Conditions: []Condition{{IgnoreMissingKeys: true, Tags: leaves{"tag1": {"value1"}}}},
+			InputMetrics: []Metric{
+				passedMetric("some-measurement", nil, nil),
+			},
+		},
+		{
 			Name:       "ors conditions together",
 			Conditions: []Condition{{Tags: leaves{"tag1": {"value1"}}}, {Tags: leaves{"tag1": {"value2"}}}},
 			InputMetrics: []Metric{
@@ -247,6 +254,7 @@ func TestLoadsFromToml(t *testing.T) {
 		  mode = "glob"
 		  operation = "or"
 		  invert = true
+		  ignore_missing_keys = true
 
 		[condition.tags]
 		  tag1 = ["value1", "value2"]
@@ -264,11 +272,12 @@ func TestLoadsFromToml(t *testing.T) {
 	assert.Equal(t,
 		[]Condition{
 			{
-				Mode:      globMode,
-				Operation: orOperation,
-				Invert:    true,
-				Tags:      leaves{"tag1": {"value1", "value2"}},
-				Fields:    leaves{"field1": {"value1", "value2"}},
+				Mode:              globMode,
+				Operation:         orOperation,
+				Invert:            true,
+				IgnoreMissingKeys: true,
+				Tags:              leaves{"tag1": {"value1", "value2"}},
+				Fields:            leaves{"field1": {"value1", "value2"}},
 			},
 			{
 				Tags: leaves{"tag1": {"value3"}},
