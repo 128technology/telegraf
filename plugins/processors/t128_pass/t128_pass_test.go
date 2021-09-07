@@ -154,6 +154,14 @@ func TestPass(t *testing.T) {
 			},
 		},
 		{
+			Name:       "converts fields to strings for comparison",
+			Conditions: []Condition{{Fields: leaves{"field1": {"12"}}}},
+			InputMetrics: []Metric{
+				passedMetric("some-measurement", nil, map[string]interface{}{"field1": 12}),
+				droppedMetric("some-measurement", nil, map[string]interface{}{"field1": 23}),
+			},
+		},
+		{
 			Name:       "field ands with tags",
 			Conditions: []Condition{{Tags: leaves{"tag1": {"value1"}}, Fields: leaves{"field1": {"value2"}}}},
 			InputMetrics: []Metric{

@@ -106,7 +106,7 @@ func fieldGetter(key string, point telegraf.Metric) (string, error) {
 		return "", fmt.Errorf("unable to find field key: %s in metric %+v", key, point)
 	}
 
-	valueStr := fmt.Sprintf("%s", value)
+	valueStr := fmt.Sprintf("%+v", value)
 
 	return valueStr, nil
 }
