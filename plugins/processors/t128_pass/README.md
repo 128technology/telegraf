@@ -31,6 +31,13 @@ The `t128_filter` filters out metrics passing through it. This processor is usef
     # tag1 = ["value1", "value2"]
     # tag2 = ["value3"]
 
+  ## Fields work the same was a fields and can be included in the same condition.
+  ## Only string values are accepted and the non-string field values in the metrics
+  ## will be converted to strings before comparison.
+  [processors.t128_pass.condition.fields]
+    # field1 = ["value1", "value2"]
+    # field2 = ["value3"]
+
   [[processors.t128_filter.condition]]
 
   [processors.t128_filter.condition.tags]
@@ -97,4 +104,25 @@ Multiple conditions are OR'd together.
 measurement tag1=value1 1612214810000000000
 measurement tag1=value2 1612214810000000000
 - measurement tag1=value3 1612214810000000000
+```
+
+### Basic Field Example Filter:
+
+Fields can also be filtered on by themselves or AND'd together with tags.
+
+```toml
+[[processors.t128_filter]]
+  [[processors.t128_filter.condition]]
+
+  [processors.t128_filter.condition.tags]
+    tag1 = ["value1"]
+
+  [processors.t128_filter.condition.fields]
+    field1 = ["value2"]
+```
+
+```diff
+measurement tag1=value1 field1=value2 1612214810000000000
+- measurement tag1=value2 field1=value2 1612214810000000000
+- measurement tag1=value1 field1=value1 1612214810000000000
 ```
