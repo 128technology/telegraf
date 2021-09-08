@@ -34,10 +34,10 @@ The `t128_filter` filters out metrics passing through it. This processor is usef
     # tag1 = ["value1", "value2"]
     # tag2 = ["value3"]
 
-  ## Fields work the same was a fields and can be included in the same condition.
-  ## Only string values are accepted and the non-string field values in the metrics
+  ## Fields work the same as tags and can be included in the same condition.
+  ## Only string values are accepted and the non-string field values in this section
   ## will be converted to strings before comparison.
-  [processors.t128_pass.condition.fields]
+  [processors.t128_pass.condition.fields.string]
     # field1 = ["value1", "value2"]
     # field2 = ["value3"]
 

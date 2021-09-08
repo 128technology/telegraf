@@ -38,9 +38,9 @@ const sampleConfig = `
 	# tag2 = ["value3"]
 
   ## Fields work the same was a fields and can be included in the same condition.
-  ## Only string values are accepted and the non-string field values in the metrics
+  ## Only string values are accepted and the non-string field values in this section
   ## will be converted to strings before comparison.
-  [processors.t128_pass.condition.fields]
+  [processors.t128_pass.condition.fields.string]
 	# field1 = ["value1", "value2"]
 	# field2 = ["value3"]
 
@@ -72,12 +72,16 @@ const (
 )
 
 type Condition struct {
-	Mode              mode      `toml:"mode"`
-	Operation         operation `toml:"operation"`
-	Invert            bool      `toml:"invert"`
-	IgnoreMissingKeys bool      `toml:"ignore_missing_keys"`
-	Tags              leaves    `toml:"tags"`
-	Fields            leaves    `toml:"fields"`
+	Mode              mode       `toml:"mode"`
+	Operation         operation  `toml:"operation"`
+	Invert            bool       `toml:"invert"`
+	IgnoreMissingKeys bool       `toml:"ignore_missing_keys"`
+	Tags              leaves     `toml:"tags"`
+	Fields            fieldTypes `toml:"fields"`
+}
+
+type fieldTypes struct {
+	String leaves `toml:"string"`
 }
 
 type T128Pass struct {
@@ -229,7 +233,7 @@ func createMatcher(conditions []Condition) (matcher, error) {
 			return nil, err
 		}
 
-		fieldMatchers, err := getLeafMatchers(condition.Fields, condition.Mode, fieldGetter, condition.IgnoreMissingKeys)
+		fieldMatchers, err := getLeafMatchers(condition.Fields.String, condition.Mode, fieldGetter, condition.IgnoreMissingKeys)
 		if err != nil {
 			return nil, err
 		}

@@ -145,7 +145,7 @@ func TestPass(t *testing.T) {
 		},
 		{
 			Name:       "fields by themselves",
-			Conditions: []Condition{{Fields: leaves{"field1": {"value1"}}}},
+			Conditions: []Condition{{Fields: fieldTypes{String: leaves{"field1": {"value1"}}}}},
 			InputMetrics: []Metric{
 				passedMetric("some-measurement", nil, map[string]interface{}{"field1": "value1"}),
 				droppedMetric("some-measurement", nil, map[string]interface{}{"field1": "value2"}),
@@ -153,7 +153,7 @@ func TestPass(t *testing.T) {
 		},
 		{
 			Name:       "field applies mode",
-			Conditions: []Condition{{Mode: globMode, Fields: leaves{"field1": {"value*"}}}},
+			Conditions: []Condition{{Mode: globMode, Fields: fieldTypes{String: leaves{"field1": {"value*"}}}}},
 			InputMetrics: []Metric{
 				passedMetric("some-measurement", nil, map[string]interface{}{"field1": "value1"}),
 				passedMetric("some-measurement", nil, map[string]interface{}{"field1": "value2"}),
@@ -162,7 +162,7 @@ func TestPass(t *testing.T) {
 		},
 		{
 			Name:       "converts fields to strings for comparison",
-			Conditions: []Condition{{Fields: leaves{"field1": {"12"}}}},
+			Conditions: []Condition{{Fields: fieldTypes{String: leaves{"field1": {"12"}}}}},
 			InputMetrics: []Metric{
 				passedMetric("some-measurement", nil, map[string]interface{}{"field1": 12}),
 				droppedMetric("some-measurement", nil, map[string]interface{}{"field1": 23}),
@@ -170,7 +170,7 @@ func TestPass(t *testing.T) {
 		},
 		{
 			Name:       "field ands with tags",
-			Conditions: []Condition{{Tags: leaves{"tag1": {"value1"}}, Fields: leaves{"field1": {"value2"}}}},
+			Conditions: []Condition{{Tags: leaves{"tag1": {"value1"}}, Fields: fieldTypes{String: leaves{"field1": {"value2"}}}}},
 			InputMetrics: []Metric{
 				passedMetric("some-measurement", map[string]string{"tag1": "value1"}, map[string]interface{}{"field1": "value2"}),
 				droppedMetric("some-measurement", map[string]string{"tag1": "value2"}, map[string]interface{}{"field1": "value2"}),
@@ -220,11 +220,11 @@ func TestValidation(t *testing.T) {
 		},
 		{
 			Name:       "needs valid field regex",
-			Conditions: []Condition{{Mode: regexMode, Fields: leaves{"tag1": {"invalid(regex"}}}},
+			Conditions: []Condition{{Mode: regexMode, Fields: fieldTypes{String: leaves{"tag1": {"invalid(regex"}}}}},
 		},
 		{
 			Name:       "needs valid field glob",
-			Conditions: []Condition{{Mode: globMode, Fields: leaves{"tag1": {"invalid[glob"}}}},
+			Conditions: []Condition{{Mode: globMode, Fields: fieldTypes{String: leaves{"tag1": {"invalid[glob"}}}}},
 		},
 		{
 			Name:       "invalid mode",
@@ -259,7 +259,7 @@ func TestLoadsFromToml(t *testing.T) {
 		[condition.tags]
 		  tag1 = ["value1", "value2"]
 
-		[condition.fields]
+		[condition.fields.string]
 		  field1 = ["value1", "value2"]
 
 		[[condition]]
@@ -277,7 +277,7 @@ func TestLoadsFromToml(t *testing.T) {
 				Invert:            true,
 				IgnoreMissingKeys: true,
 				Tags:              leaves{"tag1": {"value1", "value2"}},
-				Fields:            leaves{"field1": {"value1", "value2"}},
+				Fields:            fieldTypes{leaves{"field1": {"value1", "value2"}}},
 			},
 			{
 				Tags: leaves{"tag1": {"value3"}},
