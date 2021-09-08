@@ -120,7 +120,7 @@ Fields can also be filtered on by themselves or AND'd together with tags.
   [processors.t128_filter.condition.tags]
     tag1 = ["value1"]
 
-  [processors.t128_filter.condition.fields]
+  [processors.t128_filter.condition.fields.string]
     field1 = ["value2"]
 ```
 
