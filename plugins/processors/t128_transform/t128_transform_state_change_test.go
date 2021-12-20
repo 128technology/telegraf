@@ -1,9 +1,9 @@
 package t128_transform
 
 import (
-	"path/filepath"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -379,7 +379,7 @@ func TestStateChangeWithPersistence(t *testing.T) {
 		t.Fatal(err)
 	}
 	persistenceFile.Close()
-	
+
 	t1 := time.Now()
 	r1 := newTranformWithPersistence(t, persistToPath)
 	m1 := newMetric("foo", nil, map[string]interface{}{"/state": "state1"}, t1)
@@ -406,4 +406,4 @@ func newTranformWithPersistence(t *testing.T, path string) *T128Transform {
 	assert.Nil(t, r.Init())
 
 	return r
-} 
+}

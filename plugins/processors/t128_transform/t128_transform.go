@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
-	"strings"
 	"sort"
 	"time"
 
@@ -39,6 +38,7 @@ const sampleConfig = `
 
 	## Specify a path to persist state across telegraf instance restarts.
 	## Only applicable for "state-change" transforms.
+	## A default of "" indicates that state will not be persisted.
 	# persist_to = ""
 
 [processors.t128_transform.fields]
@@ -78,60 +78,12 @@ type target struct {
 }
 
 type observedValue struct {
-	value interface{}
+	Value interface{}
 	// previous produced (transformed) value, not previous observed
 	// (the two would be the same in some cases)
-	previous  interface{}
-	expires   time.Time
-	timestamp time.Time
-}
-
-func (o observedValue) MarshalJSON() ([]byte, error) {
-	value := struct {
-		Value        interface{}  `json:"value"`
-		Previous     interface{}  `json:"previous"`
-		Expires      string       `json:"expires"`
-		Timestamp    string       `json:"timestamp"`
-	}{
-		Value:        o.value,
-		Previous:     o.previous,
-		Expires:      o.expires.Format(time.RFC3339),
-		Timestamp:    o.timestamp.Format(time.RFC3339),
-	}
-
-	return json.Marshal(value)
-}
-
-func (o *observedValue) UnmarshalJSON(j []byte) error {
-	var rawStrings map[string]interface{}
-
-	err := json.Unmarshal(j, &rawStrings)
-	if err != nil {
-		return err
-	}
-
-	for k, v := range rawStrings {
-		switch strings.ToLower(k) {
-		case "value":
-			o.value = v
-		case "previous":
-			o.previous = v
-		case "expires":
-			t, err := time.Parse(time.RFC3339, v.(string))
-			if err != nil {
-				return err
-			}
-			o.expires = t
-		case "timestamp":
-			t, err := time.Parse(time.RFC3339, v.(string))
-			if err != nil {
-				return err
-			}
-			o.timestamp = t
-		}
-	}
-
-	return nil
+	Previous  interface{}
+	Expires   time.Time
+	Timestamp time.Time
 }
 
 func (r *T128Transform) SampleConfig() string {
@@ -162,18 +114,18 @@ func (r *T128Transform) Apply(in ...telegraf.Metric) []telegraf.Metric {
 			observed, ok := cacheFields[field.Key]
 			if !ok {
 				observed = observedValue{
-					value: nil,
+					Value: nil,
 				}
 			}
 
-			expired := !point.Time().Before(observed.expires)
+			expired := !point.Time().Before(observed.Expires)
 
 			itemTransformed := false
 			value, recordAsPrevious, err := r.transform(
 				expired,
-				observed.timestamp,
+				observed.Timestamp,
 				point.Time(),
-				observed.value,
+				observed.Value,
 				field.Value,
 			)
 			if err != nil {
@@ -187,20 +139,20 @@ func (r *T128Transform) Apply(in ...telegraf.Metric) []telegraf.Metric {
 				removeFields = append(removeFields, field.Key)
 			}
 
-			if itemTransformed && target.previousKey != "" && observed.previous != nil {
-				point.AddField(target.previousKey, observed.previous)
+			if itemTransformed && target.previousKey != "" && observed.Previous != nil {
+				point.AddField(target.previousKey, observed.Previous)
 			}
 
-			newPrevious := observed.previous
+			newPrevious := observed.Previous
 			if recordAsPrevious {
 				newPrevious = value
 			}
 
 			r.cache[seriesHash][field.Key] = observedValue{
-				value:     field.Value,
-				previous:  newPrevious,
-				expires:   point.Time().Add(r.Expiration.Duration),
-				timestamp: point.Time(),
+				Value:     field.Value,
+				Previous:  newPrevious,
+				Expires:   point.Time().Add(r.Expiration.Duration),
+				Timestamp: point.Time(),
 			}
 		}
 
@@ -331,14 +283,14 @@ func loadCache(path string) (map[uint64]map[string]observedValue, error) {
 	cache := make(map[uint64]map[string]observedValue)
 
 	data, err := ioutil.ReadFile(path)
-    if err != nil {
-      return cache, err
-    }
+	if err != nil {
+		return cache, err
+	}
 
 	err = json.Unmarshal(data, &cache)
-    if err != nil {
-        return cache, err
-    }
+	if err != nil {
+		return cache, err
+	}
 
 	return cache, nil
 }
