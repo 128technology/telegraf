@@ -380,30 +380,38 @@ func TestStateChangeWithPersistence(t *testing.T) {
 	}
 	persistenceFile.Close()
 
-	t1 := time.Now()
-	r1 := newTranformWithPersistence(t, persistToPath)
-	m1 := newMetric("foo", nil, map[string]interface{}{"/state": "state1"}, t1)
+	_, err = newTranformWithPersistence("diff", persistToPath)
+	assert.NotNil(t, err)
 
+	_, err = newTranformWithPersistence("rate", persistToPath)
+	assert.NotNil(t, err)
+
+	r1, err := newTranformWithPersistence("state-change", persistToPath)
+	assert.Nil(t, err)
+
+	t1 := time.Now()
+	m1 := newMetric("foo", nil, map[string]interface{}{"/state": "state1"}, t1)
 	rate1 := r1.Apply(m1)
 	assert.Len(t, rate1, 1)
 	assert.Equal(t, rate1[0].Fields(), sample{"/state": "state1"})
 
-	r2 := newTranformWithPersistence(t, persistToPath)
-	m2 := newMetric("foo", nil, map[string]interface{}{"/state": "state1"}, t1.Add(time.Duration(3)*time.Second))
+	r2, err := newTranformWithPersistence("state-change", persistToPath)
+	assert.Nil(t, err)
 
+	m2 := newMetric("foo", nil, map[string]interface{}{"/state": "state1"}, t1.Add(time.Duration(3)*time.Second))
 	rate2 := r2.Apply(m2)
 	assert.Len(t, rate2, 1)
 	assert.Equal(t, rate2[0].Fields(), sample{})
 }
 
-func newTranformWithPersistence(t *testing.T, path string) *T128Transform {
-	r := newTransformType("state-change")
+func newTranformWithPersistence(transformType string, path string) (*T128Transform, error) {
+	r := newTransformType(transformType)
 	r.Fields = map[string]string{"/state": "/state"}
 	r.RemoveOriginal = true
 	r.Expiration.Duration = 5 * time.Second
 	r.PersistTo = path
 	r.Log = models.NewLogger("test", "test", "")
-	assert.Nil(t, r.Init())
+	err := r.Init()
 
-	return r
+	return r, err
 }

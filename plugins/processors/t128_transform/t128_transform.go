@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"math"
+	"os"
+	"path"
 	"sort"
 	"time"
 
@@ -95,6 +97,8 @@ func (r *T128Transform) Description() string {
 }
 
 func (r *T128Transform) Apply(in ...telegraf.Metric) []telegraf.Metric {
+	cacheChanged := false
+
 	for _, point := range in {
 		seriesHash := point.HashID()
 
@@ -148,11 +152,17 @@ func (r *T128Transform) Apply(in ...telegraf.Metric) []telegraf.Metric {
 				newPrevious = value
 			}
 
-			r.cache[seriesHash][field.Key] = observedValue{
+			previous := r.cache[seriesHash][field.Key]
+			new := observedValue{
 				Value:     field.Value,
 				Previous:  newPrevious,
 				Expires:   point.Time().Add(r.Expiration.Duration),
 				Timestamp: point.Time(),
+			}
+			r.cache[seriesHash][field.Key] = new
+
+			if !cacheChanged && previous != new {
+				cacheChanged = true
 			}
 		}
 
@@ -161,7 +171,7 @@ func (r *T128Transform) Apply(in ...telegraf.Metric) []telegraf.Metric {
 		}
 	}
 
-	if r.PersistTo != "" {
+	if cacheChanged {
 		err := persistCache(r.PersistTo, r.cache)
 		if err != nil {
 			r.Log.Warnf("unable to persist cache to %s: %s", r.PersistTo, err)
@@ -178,7 +188,9 @@ func (r *T128Transform) Init() error {
 
 	switch r.Transform {
 	case "diff":
-		r.PersistTo = ""
+		if r.PersistTo != "" {
+			return fmt.Errorf("'diff' transform does not support persistence")
+		}
 
 		r.transform = func(expired bool, t1, t2 time.Time, v1, v2 interface{}) (interface{}, bool, error) {
 			if expired || v1 == nil {
@@ -193,7 +205,9 @@ func (r *T128Transform) Init() error {
 			return current - prev, true, nil
 		}
 	case "rate":
-		r.PersistTo = ""
+		if r.PersistTo != "" {
+			return fmt.Errorf("'rate' transform does not support persistence")
+		}
 
 		r.transform = func(expired bool, t1, t2 time.Time, v1, v2 interface{}) (interface{}, bool, error) {
 			if expired || v1 == nil {
@@ -215,7 +229,6 @@ func (r *T128Transform) Init() error {
 			return (current - prev) / (t2.Sub(t1).Seconds()), true, nil
 		}
 	case "state-change":
-
 		if r.PersistTo != "" {
 			persistedCache, err := loadCache(r.PersistTo)
 			if err != nil {
@@ -279,10 +292,10 @@ func (r *T128Transform) Init() error {
 	return nil
 }
 
-func loadCache(path string) (map[uint64]map[string]observedValue, error) {
+func loadCache(cachePath string) (map[uint64]map[string]observedValue, error) {
 	cache := make(map[uint64]map[string]observedValue)
 
-	data, err := ioutil.ReadFile(path)
+	data, err := ioutil.ReadFile(cachePath)
 	if err != nil {
 		return cache, err
 	}
@@ -295,13 +308,19 @@ func loadCache(path string) (map[uint64]map[string]observedValue, error) {
 	return cache, nil
 }
 
-func persistCache(path string, cache map[uint64]map[string]observedValue) error {
-	file, err := json.MarshalIndent(cache, "", "  ")
+func persistCache(cachePath string, cache map[uint64]map[string]observedValue) error {
+	parentDir := path.Dir(cachePath)
+	err := os.MkdirAll(parentDir, os.ModePerm)
 	if err != nil {
 		return err
 	}
 
-	err = ioutil.WriteFile(path, file, 0644)
+	file, err := json.Marshal(cache)
+	if err != nil {
+		return err
+	}
+
+	err = ioutil.WriteFile(cachePath, file, 0644)
 	if err != nil {
 		return err
 	}
