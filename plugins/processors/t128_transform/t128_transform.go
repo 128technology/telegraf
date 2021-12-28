@@ -1,8 +1,12 @@
 package t128_transform
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"math"
+	"os"
+	"path"
 	"sort"
 	"time"
 
@@ -34,6 +38,11 @@ const sampleConfig = `
 	## be excluded.
 	# previous_field = ""
 
+	## Specify a path to persist state across telegraf instance restarts.
+	## Only applicable for "state-change" transforms.
+	## A default of "" indicates that state will not be persisted.
+	# persist_to = ""
+
 [processors.t128_transform.fields]
 	## Replace fields with their computed values, renaming them if indicated
 	# "/rate/metric" = "/total/metric"
@@ -55,6 +64,7 @@ type T128Transform struct {
 	Expiration     internal.Duration `toml:"expiration"`
 	RemoveOriginal bool              `toml:"remove-original"`
 	Transform      string            `toml:"transform"`
+	PersistTo      string            `toml:"persist_to"`
 
 	Log telegraf.Logger `toml:"-"`
 
@@ -70,12 +80,12 @@ type target struct {
 }
 
 type observedValue struct {
-	value interface{}
+	Value interface{}
 	// previous produced (transformed) value, not previous observed
 	// (the two would be the same in some cases)
-	previous  interface{}
-	expires   time.Time
-	timestamp time.Time
+	Previous  interface{}
+	Expires   time.Time
+	Timestamp time.Time
 }
 
 func (r *T128Transform) SampleConfig() string {
@@ -87,6 +97,8 @@ func (r *T128Transform) Description() string {
 }
 
 func (r *T128Transform) Apply(in ...telegraf.Metric) []telegraf.Metric {
+	cacheChanged := false
+
 	for _, point := range in {
 		seriesHash := point.HashID()
 
@@ -106,18 +118,18 @@ func (r *T128Transform) Apply(in ...telegraf.Metric) []telegraf.Metric {
 			observed, ok := cacheFields[field.Key]
 			if !ok {
 				observed = observedValue{
-					value: nil,
+					Value: nil,
 				}
 			}
 
-			expired := !point.Time().Before(observed.expires)
+			expired := !point.Time().Before(observed.Expires)
 
 			itemTransformed := false
 			value, recordAsPrevious, err := r.transform(
 				expired,
-				observed.timestamp,
+				observed.Timestamp,
 				point.Time(),
-				observed.value,
+				observed.Value,
 				field.Value,
 			)
 			if err != nil {
@@ -131,25 +143,38 @@ func (r *T128Transform) Apply(in ...telegraf.Metric) []telegraf.Metric {
 				removeFields = append(removeFields, field.Key)
 			}
 
-			if itemTransformed && target.previousKey != "" && observed.previous != nil {
-				point.AddField(target.previousKey, observed.previous)
+			if itemTransformed && target.previousKey != "" && observed.Previous != nil {
+				point.AddField(target.previousKey, observed.Previous)
 			}
 
-			newPrevious := observed.previous
+			newPrevious := observed.Previous
 			if recordAsPrevious {
 				newPrevious = value
 			}
 
-			r.cache[seriesHash][field.Key] = observedValue{
-				value:     field.Value,
-				previous:  newPrevious,
-				expires:   point.Time().Add(r.Expiration.Duration),
-				timestamp: point.Time(),
+			previous := r.cache[seriesHash][field.Key]
+			new := observedValue{
+				Value:     field.Value,
+				Previous:  newPrevious,
+				Expires:   point.Time().Add(r.Expiration.Duration),
+				Timestamp: point.Time(),
+			}
+			r.cache[seriesHash][field.Key] = new
+
+			if !cacheChanged && previous != new {
+				cacheChanged = true
 			}
 		}
 
 		for _, fieldKey := range removeFields {
 			point.RemoveField(fieldKey)
+		}
+	}
+
+	if r.PersistTo != "" && cacheChanged {
+		err := persistCache(r.PersistTo, r.cache)
+		if err != nil {
+			r.Log.Warnf("unable to persist cache to %s: %s", r.PersistTo, err)
 		}
 	}
 
@@ -163,6 +188,10 @@ func (r *T128Transform) Init() error {
 
 	switch r.Transform {
 	case "diff":
+		if r.PersistTo != "" {
+			return fmt.Errorf("'diff' transform does not support persistence")
+		}
+
 		r.transform = func(expired bool, t1, t2 time.Time, v1, v2 interface{}) (interface{}, bool, error) {
 			if expired || v1 == nil {
 				return nil, true, nil
@@ -176,6 +205,10 @@ func (r *T128Transform) Init() error {
 			return current - prev, true, nil
 		}
 	case "rate":
+		if r.PersistTo != "" {
+			return fmt.Errorf("'rate' transform does not support persistence")
+		}
+
 		r.transform = func(expired bool, t1, t2 time.Time, v1, v2 interface{}) (interface{}, bool, error) {
 			if expired || v1 == nil {
 				return nil, true, nil
@@ -196,6 +229,15 @@ func (r *T128Transform) Init() error {
 			return (current - prev) / (t2.Sub(t1).Seconds()), true, nil
 		}
 	case "state-change":
+		if r.PersistTo != "" {
+			persistedCache, err := loadCache(r.PersistTo)
+			if err != nil {
+				r.Log.Warnf("unable to load cache from %s: %s", r.PersistTo, err)
+			} else {
+				r.cache = persistedCache
+			}
+		}
+
 		r.transform = func(expired bool, t1, t2 time.Time, v1, v2 interface{}) (interface{}, bool, error) {
 			if expired || v1 == nil {
 				return v2, true, nil
@@ -245,6 +287,42 @@ func (r *T128Transform) Init() error {
 		// If the time difference matches, don't expire. Adjusting here makes
 		// later math easier.
 		r.Expiration.Duration++
+	}
+
+	return nil
+}
+
+func loadCache(cachePath string) (map[uint64]map[string]observedValue, error) {
+	cache := make(map[uint64]map[string]observedValue)
+
+	data, err := ioutil.ReadFile(cachePath)
+	if err != nil {
+		return cache, err
+	}
+
+	err = json.Unmarshal(data, &cache)
+	if err != nil {
+		return cache, err
+	}
+
+	return cache, nil
+}
+
+func persistCache(cachePath string, cache map[uint64]map[string]observedValue) error {
+	parentDir := path.Dir(cachePath)
+	err := os.MkdirAll(parentDir, os.ModePerm)
+	if err != nil {
+		return err
+	}
+
+	file, err := json.Marshal(cache)
+	if err != nil {
+		return err
+	}
+
+	err = ioutil.WriteFile(cachePath, file, 0644)
+	if err != nil {
+		return err
 	}
 
 	return nil

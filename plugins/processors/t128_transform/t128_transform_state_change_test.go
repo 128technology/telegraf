@@ -1,8 +1,13 @@
 package t128_transform
 
 import (
+	"io/ioutil"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/influxdata/telegraf/models"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -73,9 +78,9 @@ func TestStateChangeLeavesUnmarkedFieldsInTact(t *testing.T) {
 	assert.Equal(t, int64(60), v)
 }
 
-func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
-	type sample = map[string]interface{}
+type sample = map[string]interface{}
 
+func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
 	testCases := []struct {
 		Name           string
 		Fields         map[string]string
@@ -358,4 +363,55 @@ func TestStateChangeRemoveOriginalAndRename(t *testing.T) {
 			assert.Equal(t, result.Fields(), testCase.Result)
 		})
 	}
+}
+
+func TestStateChangeWithPersistence(t *testing.T) {
+	testDir, err := ioutil.TempDir("/tmp/", "t128-transform-test")
+	if err != nil {
+		t.Fatalf("could not create temp dir: %v", testDir)
+	}
+	defer os.RemoveAll(testDir)
+
+	persistToPath := filepath.Join(testDir, "last-state")
+
+	persistenceFile, err := os.Create(persistToPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	persistenceFile.Close()
+
+	_, err = newTranformWithPersistence("diff", persistToPath)
+	assert.NotNil(t, err)
+
+	_, err = newTranformWithPersistence("rate", persistToPath)
+	assert.NotNil(t, err)
+
+	r1, err := newTranformWithPersistence("state-change", persistToPath)
+	assert.Nil(t, err)
+
+	t1 := time.Now()
+	m1 := newMetric("foo", nil, map[string]interface{}{"/state": "state1"}, t1)
+	rate1 := r1.Apply(m1)
+	assert.Len(t, rate1, 1)
+	assert.Equal(t, rate1[0].Fields(), sample{"/state": "state1"})
+
+	r2, err := newTranformWithPersistence("state-change", persistToPath)
+	assert.Nil(t, err)
+
+	m2 := newMetric("foo", nil, map[string]interface{}{"/state": "state1"}, t1.Add(time.Duration(3)*time.Second))
+	rate2 := r2.Apply(m2)
+	assert.Len(t, rate2, 1)
+	assert.Equal(t, rate2[0].Fields(), sample{})
+}
+
+func newTranformWithPersistence(transformType string, path string) (*T128Transform, error) {
+	r := newTransformType(transformType)
+	r.Fields = map[string]string{"/state": "/state"}
+	r.RemoveOriginal = true
+	r.Expiration.Duration = 5 * time.Second
+	r.PersistTo = path
+	r.Log = models.NewLogger("test", "test", "")
+	err := r.Init()
+
+	return r, err
 }
