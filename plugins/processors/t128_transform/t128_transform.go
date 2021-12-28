@@ -171,7 +171,7 @@ func (r *T128Transform) Apply(in ...telegraf.Metric) []telegraf.Metric {
 		}
 	}
 
-	if cacheChanged {
+	if r.PersistTo != "" && cacheChanged {
 		err := persistCache(r.PersistTo, r.cache)
 		if err != nil {
 			r.Log.Warnf("unable to persist cache to %s: %s", r.PersistTo, err)
