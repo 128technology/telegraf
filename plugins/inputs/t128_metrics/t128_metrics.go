@@ -33,10 +33,10 @@ type T128Metrics struct {
 	UseIntegerConversion    bool               `toml:"use_integer_conversion"`
 	UseBulkRetrieval        bool               `toml:"use_bulk_retrieval"`
 
-	client    *http.Client
-	limiter   *requestLimiter
-	retriever Retriever
-	notFoundMetrics  map[int]struct{}
+	client          *http.Client
+	limiter         *requestLimiter
+	retriever       Retriever
+	notFoundMetrics map[int]struct{}
 }
 
 // ConfiguredMetric represents a single configured metric element
@@ -147,7 +147,7 @@ func (plugin *T128Metrics) Gather(acc telegraf.Accumulator) error {
 			wg.Done()
 			continue
 		}
-		
+
 		go func(idx int) {
 			plugin.retrieveMetrics(idx, acc, timestamp)
 			wg.Done()
