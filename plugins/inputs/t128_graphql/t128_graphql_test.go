@@ -89,7 +89,7 @@ var CollectorTestCases = []struct {
 		ExpectedRequests: []int{1},
 	},
 	{
-		Name:            "retries if not found",
+		Name:            "propogates not found error to accumulator",
 		EntryPoint:      "allRouters(name:'not-a-router')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
 		Fields:          map[string]string{"test-field": "test-field"},
 		Tags:            map[string]string{"test-tag": "test-tag"},
@@ -98,25 +98,8 @@ var CollectorTestCases = []struct {
 		ExpectedMetrics: nil,
 		ExpectedErrors: []string{
 			"status code 404 not OK for collector test-collector: it's not right",
-			"status code 404 not OK for collector test-collector: it's not right",
 		},
-		RetryIfNotFound:  true,
-		ExpectedRequests: []int{1, 2},
-	},
-	{
-		Name:            "doesn't retry if not found",
-		EntryPoint:      "allRouters(name:'not-a-router')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
-		Fields:          map[string]string{"test-field": "test-field"},
-		Tags:            map[string]string{"test-tag": "test-tag"},
-		Query:           InvalidRouterQuery,
-		Endpoint:        Endpoint{"/api/v1/graphql/", 404, InvalidRouterExpectedRequest, `it's not right`},
-		ExpectedMetrics: nil,
-		ExpectedErrors: []string{
-			"status code 404 not OK for collector test-collector: it's not right",
-			"collector configured to not retry when endpoint not found (404), stopping queries",
-		},
-		RetryIfNotFound:  false,
-		ExpectedRequests: []int{1, 1},
+		ExpectedRequests: []int{1},
 	},
 	{
 		Name:             "propogates invalid json error to accumulator",
@@ -149,6 +132,48 @@ var CollectorTestCases = []struct {
 		ExpectedMetrics:  nil,
 		ExpectedErrors:   []string{"unexpected response for collector test-collector: Cannot query field \"invalid-field\" on type \"ArpEntryType\"."},
 		ExpectedRequests: []int{1},
+	},
+	{
+		Name:            "retries if not found",
+		EntryPoint: "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
+		Fields:     map[string]string{"test-field": "test-field"},
+		Tags:       nil,
+		Query:      ValidQueryNoTag,
+		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestNoTag, `
+		{
+			"errors": [{
+				"name": "GraphQLError",
+				"message": "highwayManager@CHSSDWCond01CHI.CHSSDWCondMD returned a 404"
+			}]
+		  }`},
+		ExpectedMetrics: nil,
+		ExpectedErrors: []string{
+			"unexpected response for collector test-collector: highwayManager@CHSSDWCond01CHI.CHSSDWCondMD returned a 404",
+			"unexpected response for collector test-collector: highwayManager@CHSSDWCond01CHI.CHSSDWCondMD returned a 404",
+		},
+		RetryIfNotFound:  true,
+		ExpectedRequests: []int{1, 2},
+	},
+	{
+		Name:            "doesn't retry if not found",
+		EntryPoint: "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
+		Fields:     map[string]string{"test-field": "test-field"},
+		Tags:       nil,
+		Query:      ValidQueryNoTag,
+		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestNoTag, `
+		{
+			"errors": [{
+				"name": "GraphQLError",
+				"message": "highwayManager@CHSSDWCond01CHI.CHSSDWCondMD returned a 404"
+			}]
+		  }`},
+		ExpectedMetrics: nil,
+		ExpectedErrors: []string{
+			"unexpected response for collector test-collector: highwayManager@CHSSDWCond01CHI.CHSSDWCondMD returned a 404",
+			"collector configured to not retry when endpoint not found (404), stopping queries",
+		},
+		RetryIfNotFound:  false,
+		ExpectedRequests: []int{1, 1},
 	},
 	{
 		Name:       "missing extract-tags produces response",

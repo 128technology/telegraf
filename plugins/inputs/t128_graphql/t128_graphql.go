@@ -164,14 +164,6 @@ func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 		for _, err := range decodeAndReportJSONErrors(message, template) {
 			acc.AddError(err)
 		}
-
-		if response.StatusCode == 404 {
-			plugin.endpointNotFound = true
-
-			if !plugin.RetryIfNotFound {
-				acc.AddError(errors.New("collector configured to not retry when endpoint not found (404), stopping queries"))
-			}
-		}
 		return nil
 	}
 
@@ -188,6 +180,14 @@ func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 		template := fmt.Sprintf("unexpected response for collector %s", plugin.CollectorName) + ": %s"
 		for _, err := range decodeAndReportJSONErrors(message, template) {
 			acc.AddError(err)
+
+			if strings.Contains(fmt.Sprintf("%s", err), "returned a 404") {
+				plugin.endpointNotFound = true
+	
+				if !plugin.RetryIfNotFound {
+					acc.AddError(errors.New("collector configured to not retry when endpoint not found (404), stopping queries"))
+				}
+			}
 		}
 		return nil
 	}
