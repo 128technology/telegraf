@@ -134,7 +134,7 @@ var CollectorTestCases = []struct {
 		ExpectedRequests: []int{1},
 	},
 	{
-		Name:            "retries if not found",
+		Name:       "retries if not found",
 		EntryPoint: "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
 		Fields:     map[string]string{"test-field": "test-field"},
 		Tags:       nil,
@@ -155,7 +155,7 @@ var CollectorTestCases = []struct {
 		ExpectedRequests: []int{1, 2},
 	},
 	{
-		Name:            "doesn't retry if not found",
+		Name:       "doesn't retry if not found",
 		EntryPoint: "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
 		Fields:     map[string]string{"test-field": "test-field"},
 		Tags:       nil,

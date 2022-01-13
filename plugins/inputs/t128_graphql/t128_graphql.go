@@ -183,7 +183,7 @@ func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 
 			if strings.Contains(fmt.Sprintf("%s", err), "returned a 404") {
 				plugin.endpointNotFound = true
-	
+
 				if !plugin.RetryIfNotFound {
 					acc.AddError(errors.New("collector configured to not retry when endpoint not found (404), stopping queries"))
 				}
