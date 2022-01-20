@@ -181,7 +181,7 @@ func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 		for _, err := range decodeAndReportJSONErrors(message, template) {
 			acc.AddError(err)
 
-			if strings.Contains(fmt.Sprintf("%s", err), "returned a 404") {
+			if strings.Contains(err.Error(), "returned a 404") {
 				plugin.endpointNotFound = true
 
 				if !plugin.RetryIfNotFound {
