@@ -36,29 +36,33 @@ const (
 )
 
 var CollectorTestCases = []struct {
-	Name            string
-	EntryPoint      string
-	Fields          map[string]string
-	Tags            map[string]string
-	InitError       bool
-	Query           string
-	Endpoint        Endpoint
-	ExpectedMetrics []*testutil.Metric
-	ExpectedErrors  []string
+	Name             string
+	EntryPoint       string
+	Fields           map[string]string
+	Tags             map[string]string
+	InitError        bool
+	Query            string
+	Endpoint         Endpoint
+	ExpectedMetrics  []*testutil.Metric
+	ExpectedErrors   []string
+	RetryIfNotFound  bool
+	ExpectedRequests []int
 }{
 	{
-		Name:       "missing entry-point produces no request or metrics",
-		EntryPoint: "",
-		Fields:     nil,
-		Tags:       nil,
-		InitError:  true,
+		Name:             "missing entry-point produces no request or metrics",
+		EntryPoint:       "",
+		Fields:           nil,
+		Tags:             nil,
+		InitError:        true,
+		ExpectedRequests: []int{0},
 	},
 	{
-		Name:       "missing extract-fields produces no request or metrics",
-		EntryPoint: "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
-		Fields:     nil,
-		Tags:       nil,
-		InitError:  true,
+		Name:             "missing extract-fields produces no request or metrics",
+		EntryPoint:       "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
+		Fields:           nil,
+		Tags:             nil,
+		InitError:        true,
+		ExpectedRequests: []int{0},
 	},
 	{
 		Name:       "tag with graphQL argument in path produces no request or metrics",
@@ -68,7 +72,8 @@ var CollectorTestCases = []struct {
 			"test-tag":       "test-tag",
 			"other-test-tag": "allRouters(name:'ComboEast')/nodes/name",
 		},
-		InitError: true,
+		InitError:        true,
+		ExpectedRequests: []int{0},
 	},
 	{
 		Name:            "empty response produces error",
@@ -81,6 +86,7 @@ var CollectorTestCases = []struct {
 		ExpectedErrors: []string{
 			"empty response for collector test-collector: {}",
 		},
+		ExpectedRequests: []int{1},
 	},
 	{
 		Name:            "propogates not found error to accumulator",
@@ -93,16 +99,18 @@ var CollectorTestCases = []struct {
 		ExpectedErrors: []string{
 			"status code 404 not OK for collector test-collector: it's not right",
 		},
+		ExpectedRequests: []int{1},
 	},
 	{
-		Name:            "propogates invalid json error to accumulator",
-		EntryPoint:      "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
-		Fields:          map[string]string{"test-field": "test-field"},
-		Tags:            map[string]string{"test-tag": "test-tag"},
-		Query:           ValidQuerySingleTag,
-		Endpoint:        Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestSingleTag, `{"test": }`},
-		ExpectedMetrics: nil,
-		ExpectedErrors:  []string{"invalid json response for collector test-collector: invalid character '}' looking for beginning of value"},
+		Name:             "propogates invalid json error to accumulator",
+		EntryPoint:       "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
+		Fields:           map[string]string{"test-field": "test-field"},
+		Tags:             map[string]string{"test-tag": "test-tag"},
+		Query:            ValidQuerySingleTag,
+		Endpoint:         Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestSingleTag, `{"test": }`},
+		ExpectedMetrics:  nil,
+		ExpectedErrors:   []string{"invalid json response for collector test-collector: invalid character '}' looking for beginning of value"},
+		ExpectedRequests: []int{1},
 	},
 	{
 		Name:       "propogates graphQL error to accumulator",
@@ -121,8 +129,51 @@ var CollectorTestCases = []struct {
 				}]
 			}]
 		  }`},
+		ExpectedMetrics:  nil,
+		ExpectedErrors:   []string{"unexpected response for collector test-collector: Cannot query field \"invalid-field\" on type \"ArpEntryType\"."},
+		ExpectedRequests: []int{1},
+	},
+	{
+		Name:       "retries if not found",
+		EntryPoint: "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
+		Fields:     map[string]string{"test-field": "test-field"},
+		Tags:       nil,
+		Query:      ValidQueryNoTag,
+		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestNoTag, `
+		{
+			"errors": [{
+				"name": "GraphQLError",
+				"message": "highwayManager@CHSSDWCond01CHI.CHSSDWCondMD returned a 404"
+			}]
+		  }`},
 		ExpectedMetrics: nil,
-		ExpectedErrors:  []string{"unexpected response for collector test-collector: Cannot query field \"invalid-field\" on type \"ArpEntryType\"."},
+		ExpectedErrors: []string{
+			"unexpected response for collector test-collector: highwayManager@CHSSDWCond01CHI.CHSSDWCondMD returned a 404",
+			"unexpected response for collector test-collector: highwayManager@CHSSDWCond01CHI.CHSSDWCondMD returned a 404",
+		},
+		RetryIfNotFound:  true,
+		ExpectedRequests: []int{1, 2},
+	},
+	{
+		Name:       "doesn't retry if not found",
+		EntryPoint: "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
+		Fields:     map[string]string{"test-field": "test-field"},
+		Tags:       nil,
+		Query:      ValidQueryNoTag,
+		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestNoTag, `
+		{
+			"errors": [{
+				"name": "GraphQLError",
+				"message": "highwayManager@CHSSDWCond01CHI.CHSSDWCondMD returned a 404"
+			}]
+		  }`},
+		ExpectedMetrics: nil,
+		ExpectedErrors: []string{
+			"unexpected response for collector test-collector: highwayManager@CHSSDWCond01CHI.CHSSDWCondMD returned a 404",
+			"collector configured to not retry when endpoint not found (404), stopping queries",
+		},
+		RetryIfNotFound:  false,
+		ExpectedRequests: []int{1, 1},
 	},
 	{
 		Name:       "missing extract-tags produces response",
@@ -154,7 +205,8 @@ var CollectorTestCases = []struct {
 				Fields:      map[string]interface{}{"test-field": 128.0},
 			},
 		},
-		ExpectedErrors: nil,
+		ExpectedErrors:   nil,
+		ExpectedRequests: []int{1},
 	},
 	{
 		Name:       "missing tags/fields with absolute path produces response", //complex processing tested separately
@@ -187,7 +239,8 @@ var CollectorTestCases = []struct {
 				Fields:      map[string]interface{}{"test-field": 128.0},
 			},
 		},
-		ExpectedErrors: nil,
+		ExpectedErrors:   nil,
+		ExpectedRequests: []int{1},
 	},
 	{
 		Name:       "full config produces response", //complex processing tested separately
@@ -234,22 +287,24 @@ var CollectorTestCases = []struct {
 				},
 			},
 		},
-		ExpectedErrors: nil,
+		ExpectedErrors:   nil,
+		ExpectedRequests: []int{1},
 	},
 }
 
 func TestT128GraphqlCollector(t *testing.T) {
 	for _, testCase := range CollectorTestCases {
 		t.Run(testCase.Name, func(t *testing.T) {
-			fakeServer := createTestServer(t, testCase.Endpoint)
+			fakeServer, requestCount := createTestServer(t, testCase.Endpoint)
 			defer fakeServer.Close()
 
 			plugin := &plugin.T128GraphQL{
-				CollectorName: "test-collector",
-				BaseURL:       fakeServer.URL + "/api/v1/graphql",
-				EntryPoint:    testCase.EntryPoint,
-				Fields:        testCase.Fields,
-				Tags:          testCase.Tags,
+				CollectorName:   "test-collector",
+				BaseURL:         fakeServer.URL + "/api/v1/graphql",
+				EntryPoint:      testCase.EntryPoint,
+				Fields:          testCase.Fields,
+				Tags:            testCase.Tags,
+				RetryIfNotFound: testCase.RetryIfNotFound,
 			}
 
 			var acc testutil.Accumulator
@@ -262,7 +317,21 @@ func TestT128GraphqlCollector(t *testing.T) {
 			}
 
 			plugin.Query = testCase.Query
-			plugin.Gather(&acc)
+
+			for _, expectedRequests := range testCase.ExpectedRequests {
+				plugin.Gather(&acc)
+				require.Equal(t, expectedRequests, *requestCount)
+
+				// Timestamps aren't important, but need to match
+				for _, m := range acc.Metrics {
+					m.Time = time.Time{}
+				}
+
+				// Avoid specifying this unused type for each field
+				for _, m := range testCase.ExpectedMetrics {
+					m.Type = telegraf.Untyped
+				}
+			}
 
 			var errorStrings []string = nil
 			for _, err := range acc.Errors {
@@ -270,17 +339,6 @@ func TestT128GraphqlCollector(t *testing.T) {
 			}
 
 			require.ElementsMatch(t, testCase.ExpectedErrors, errorStrings)
-
-			// Timestamps aren't important, but need to match
-			for _, m := range acc.Metrics {
-				m.Time = time.Time{}
-			}
-
-			// Avoid specifying this unused type for each field
-			for _, m := range testCase.ExpectedMetrics {
-				m.Type = telegraf.Untyped
-			}
-
 			require.ElementsMatch(t, testCase.ExpectedMetrics, acc.Metrics)
 		})
 	}
@@ -322,9 +380,11 @@ func TestTimoutUsedForRequests(t *testing.T) {
 	fakeServer.Close()
 }
 
-func createTestServer(t *testing.T, endpoint Endpoint) *httptest.Server {
+func createTestServer(t *testing.T, endpoint Endpoint) (*httptest.Server, *int) {
+	requestCount := 0
 	fakeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer r.Body.Close()
+		requestCount += 1
 
 		require.Equal(t, "application/json", r.Header.Get("Content-Type"))
 		require.Equal(t, "POST", r.Method)
@@ -349,5 +409,5 @@ func createTestServer(t *testing.T, endpoint Endpoint) *httptest.Server {
 		w.Write([]byte(endpoint.Response))
 	}))
 
-	return fakeServer
+	return fakeServer, &requestCount
 }
