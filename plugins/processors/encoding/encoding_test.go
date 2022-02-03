@@ -2,6 +2,7 @@ package encoding
 
 import (
 	"fmt"
+	"reflect"
 	"testing"
 	"time"
 
@@ -25,7 +26,7 @@ func TestEncoding(t *testing.T) {
 			value:       "",
 			compression: "gzip",
 			encoding:    "base64",
-			result:      "H4sIAAAAAAAA/wEAAP//AAAAAAAAAAA",
+			result:      "H4sIAAAAAAAA/wEAAP//AAAAAAAAAAA=",
 			err:         "",
 		},
 		{
@@ -41,7 +42,7 @@ func TestEncoding(t *testing.T) {
 			value:       "this is a test",
 			compression: "gzip",
 			encoding:    "base64",
-			result:      "H4sIAAAAAAAA/yrJyCxWyCxWSFQoSS0uAQQAAP//6uceDQ4AAAA",
+			result:      "H4sIAAAAAAAA/yrJyCxWyCxWSFQoSS0uAQQAAP//6uceDQ4AAAA=",
 			err:         "",
 		},
 		{
@@ -49,7 +50,7 @@ func TestEncoding(t *testing.T) {
 			value:       "this is a test",
 			compression: "",
 			encoding:    "base64",
-			result:      "dGhpcyBpcyBhIHRlc3Q",
+			result:      "dGhpcyBpcyBhIHRlc3Q=",
 			err:         "",
 		},
 	}
@@ -76,7 +77,7 @@ func TestDecoding(t *testing.T) {
 	}{
 		{
 			name:        "gzip unzips empty string",
-			value:       "H4sIAAAAAAAA/wEAAP//AAAAAAAAAAA",
+			value:       "H4sIAAAAAAAA/wEAAP//AAAAAAAAAAA=",
 			compression: "gzip",
 			encoding:    "base64",
 			result:      "",
@@ -92,14 +93,22 @@ func TestDecoding(t *testing.T) {
 		},
 		{
 			name:        "gzip works with encoding",
-			value:       "H4sIAAAAAAAA/yrJyCxWyCxWSFQoSS0uAQQAAP//6uceDQ4AAAA",
+			value:       "H4sIAAAAAAAA/yrJyCxWyCxWSFQoSS0uAQQAAP//6uceDQ4AAAA=",
 			compression: "gzip",
 			encoding:    "base64",
 			result:      "this is a test",
 			err:         "",
 		},
 		{
-			name:        "encoding works without compression",
+			name:        "decoding works without compression",
+			value:       "dGhpcyBpcyBhIHRlc3Q=",
+			compression: "",
+			encoding:    "base64",
+			result:      "this is a test",
+			err:         "",
+		},
+		{
+			name:        "decoding works without padding",
 			value:       "dGhpcyBpcyBhIHRlc3Q",
 			compression: "",
 			encoding:    "base64",
@@ -280,7 +289,7 @@ func TestEncodingMetrics(t *testing.T) {
 				m().field("sample", "test value").build(),
 			},
 			encoded: []telegraf.Metric{
-				m().field("sample", "H4sIAAAAAAAA/ypJLS5RKEvMKU0FBAAA//8rQd3sCgAAAA").build(),
+				m().field("sample", "H4sIAAAAAAAA/ypJLS5RKEvMKU0FBAAA//8rQd3sCgAAAA==").build(),
 			},
 		},
 		{
@@ -292,7 +301,7 @@ func TestEncodingMetrics(t *testing.T) {
 				m().field("sample", "test value").build(),
 			},
 			encoded: []telegraf.Metric{
-				m().field("sample", "dGVzdCB2YWx1ZQ").build(),
+				m().field("sample", "dGVzdCB2YWx1ZQ==").build(),
 			},
 		},
 		{
@@ -307,7 +316,7 @@ func TestEncodingMetrics(t *testing.T) {
 			encoded: []telegraf.Metric{
 				m().
 					field("compression", "gzip").
-					field("sample", "H4sIAAAAAAAA/ypJLS5RKEvMKU0FBAAA//8rQd3sCgAAAA").
+					field("sample", "H4sIAAAAAAAA/ypJLS5RKEvMKU0FBAAA//8rQd3sCgAAAA==").
 					build(),
 			},
 		},
@@ -323,7 +332,7 @@ func TestEncodingMetrics(t *testing.T) {
 			encoded: []telegraf.Metric{
 				m().
 					tag("compression", "gzip").
-					field("sample", "H4sIAAAAAAAA/ypJLS5RKEvMKU0FBAAA//8rQd3sCgAAAA").
+					field("sample", "H4sIAAAAAAAA/ypJLS5RKEvMKU0FBAAA//8rQd3sCgAAAA==").
 					build(),
 			},
 		},
@@ -344,7 +353,7 @@ func TestEncodingMetrics(t *testing.T) {
 				m().
 					tag("compression", "").
 					field("compression", "gzip").
-					field("sample", "dGVzdCB2YWx1ZQ").build(),
+					field("sample", "dGVzdCB2YWx1ZQ==").build(),
 			},
 		},
 		{
@@ -361,7 +370,7 @@ func TestEncodingMetrics(t *testing.T) {
 			encoded: []telegraf.Metric{
 				m().
 					field("compression", "").
-					field("sample", "dGVzdCB2YWx1ZQ").build(),
+					field("sample", "dGVzdCB2YWx1ZQ==").build(),
 			},
 		},
 		{
@@ -375,7 +384,7 @@ func TestEncodingMetrics(t *testing.T) {
 				m().field("sample", "test value").build(),
 			},
 			encoded: []telegraf.Metric{
-				m().field("target", "dGVzdCB2YWx1ZQ").build(),
+				m().field("target", "dGVzdCB2YWx1ZQ==").build(),
 			},
 		},
 		{
@@ -389,7 +398,7 @@ func TestEncodingMetrics(t *testing.T) {
 				m().field("sample", "test value").build(),
 			},
 			encoded: []telegraf.Metric{
-				m().field("sample", "test value").field("target", "dGVzdCB2YWx1ZQ").build(),
+				m().field("sample", "test value").field("target", "dGVzdCB2YWx1ZQ==").build(),
 			},
 		},
 		{
@@ -399,6 +408,15 @@ func TestEncodingMetrics(t *testing.T) {
 			},
 			encoded: []telegraf.Metric{
 				m().field("sample", 5).build(),
+			},
+		},
+		{
+			name: "leaves metric missing target field",
+			metrics: []telegraf.Metric{
+				m().field("other", "some value").build(),
+			},
+			encoded: []telegraf.Metric{
+				m().field("other", "some value").build(),
 			},
 		},
 	}
@@ -435,7 +453,7 @@ func TestDecodingMetrics(t *testing.T) {
 		{
 			name: "decompressed by compression",
 			metrics: []telegraf.Metric{
-				m().field("sample", "H4sIAAAAAAAA/ypJLS5RKEvMKU0FBAAA//8rQd3sCgAAAA").build(),
+				m().field("sample", "H4sIAAAAAAAA/ypJLS5RKEvMKU0FBAAA//8rQd3sCgAAAA==").build(),
 			},
 			decoded: []telegraf.Metric{
 				m().field("sample", "test value").build(),
@@ -447,7 +465,7 @@ func TestDecodingMetrics(t *testing.T) {
 				e.Compression = ""
 			},
 			metrics: []telegraf.Metric{
-				m().field("sample", "dGVzdCB2YWx1ZQ").build(),
+				m().field("sample", "dGVzdCB2YWx1ZQ==").build(),
 			},
 			decoded: []telegraf.Metric{
 				m().field("sample", "test value").build(),
@@ -461,7 +479,7 @@ func TestDecodingMetrics(t *testing.T) {
 			},
 			metrics: []telegraf.Metric{
 				m().
-					field("sample", "H4sIAAAAAAAA/ypJLS5RKEvMKU0FBAAA//8rQd3sCgAAAA").
+					field("sample", "H4sIAAAAAAAA/ypJLS5RKEvMKU0FBAAA//8rQd3sCgAAAA==").
 					field("compression", "gzip").build(),
 			},
 			decoded: []telegraf.Metric{
@@ -477,7 +495,7 @@ func TestDecodingMetrics(t *testing.T) {
 			metrics: []telegraf.Metric{
 				m().
 					tag("compression", "gzip").
-					field("sample", "H4sIAAAAAAAA/ypJLS5RKEvMKU0FBAAA//8rQd3sCgAAAA").
+					field("sample", "H4sIAAAAAAAA/ypJLS5RKEvMKU0FBAAA//8rQd3sCgAAAA==").
 					build(),
 			},
 			decoded: []telegraf.Metric{
@@ -495,7 +513,7 @@ func TestDecodingMetrics(t *testing.T) {
 				m().
 					tag("compression", "").
 					field("compression", "gzip").
-					field("sample", "dGVzdCB2YWx1ZQ").build(),
+					field("sample", "dGVzdCB2YWx1ZQ==").build(),
 			},
 			decoded: []telegraf.Metric{
 				m().
@@ -513,7 +531,7 @@ func TestDecodingMetrics(t *testing.T) {
 			metrics: []telegraf.Metric{
 				m().
 					field("compression", "").
-					field("sample", "dGVzdCB2YWx1ZQ").build(),
+					field("sample", "dGVzdCB2YWx1ZQ==").build(),
 			},
 			decoded: []telegraf.Metric{
 				m().
@@ -529,7 +547,7 @@ func TestDecodingMetrics(t *testing.T) {
 				e.Compression = ""
 			},
 			metrics: []telegraf.Metric{
-				m().field("sample", "dGVzdCB2YWx1ZQ").build(),
+				m().field("sample", "dGVzdCB2YWx1ZQ==").build(),
 			},
 			decoded: []telegraf.Metric{
 				m().field("target", "test value").build(),
@@ -543,10 +561,10 @@ func TestDecodingMetrics(t *testing.T) {
 				e.Compression = ""
 			},
 			metrics: []telegraf.Metric{
-				m().field("sample", "dGVzdCB2YWx1ZQ").build(),
+				m().field("sample", "dGVzdCB2YWx1ZQ==").build(),
 			},
 			decoded: []telegraf.Metric{
-				m().field("sample", "dGVzdCB2YWx1ZQ").field("target", "test value").build(),
+				m().field("sample", "dGVzdCB2YWx1ZQ==").field("target", "test value").build(),
 			},
 		},
 		{
@@ -561,10 +579,19 @@ func TestDecodingMetrics(t *testing.T) {
 		{
 			name: "leaves failed decompression",
 			metrics: []telegraf.Metric{
-				m().field("sample", "dGVzdCB2YWx1ZQ").build(),
+				m().field("sample", "dGVzdCB2YWx1ZQ==").build(),
 			},
 			decoded: []telegraf.Metric{
-				m().field("sample", "dGVzdCB2YWx1ZQ").build(),
+				m().field("sample", "dGVzdCB2YWx1ZQ==").build(),
+			},
+		},
+		{
+			name: "leaves metric missing target field",
+			metrics: []telegraf.Metric{
+				m().field("other", "some value").build(),
+			},
+			decoded: []telegraf.Metric{
+				m().field("other", "some value").build(),
 			},
 		},
 	}
@@ -589,4 +616,24 @@ func TestDecodingMetrics(t *testing.T) {
 			testutil.RequireMetricsEqual(t, testCase.decoded, results)
 		})
 	}
+}
+
+func TestDefaultConfig(t *testing.T) {
+	e := newEncoding()
+
+	assert.Equal(t, "", e.Field)
+	assert.Equal(t, false, e.RemoveOriginal)
+	assert.Equal(t, "", e.DestField)
+	assert.Equal(t, "decode", e.Operation)
+	assert.Equal(t, "gzip", e.Compression)
+	assert.Equal(t, "", e.CompressionField)
+	assert.Equal(t, "", e.CompressionTag)
+	assert.Equal(t, "base64", e.Encoding)
+	assert.Equal(t, nil, e.Log)
+	if e.operation != nil {
+		assert.True(t, false, "The operation function shouldn't be set")
+	}
+
+	// make sure defaults for new fields are validated
+	assert.Equal(t, 10, reflect.TypeOf(*e).NumField())
 }
