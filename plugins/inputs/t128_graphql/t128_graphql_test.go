@@ -22,20 +22,22 @@ type Endpoint struct {
 	Response        string
 }
 
-// TODO: clean this all up
 const (
-	ValidExpectedRequestSingleTag    = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}}}}}}"}`
-	ValidQuerySingleTag              = "query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}}}}}}"
-	ValidExpectedRequestNoTag        = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field}}}}}}}"}`
-	ValidQueryNoTag                  = "query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field}}}}}}}"
-	ValidExpectedRequestWithAbsPaths = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nname\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}\nname}}}}}"}`
-	ValidQueryWithAbsPaths           = "query {\nallRouters(name:\"ComboEast\"){\nnodes{\nname\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}\nname}}}}}"
+	ValidExpectedRequestSingleTag         = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}}}}}}"}`
+	ValidExpectedRequestNoTag             = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field}}}}}}}"}`
+	ValidExpectedRequestWithAbsPaths      = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nname\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}\nname}}}}}"}`
 	ValidExpectedRequestWithMixedResponse = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\nrouter{\npeers(names:\"peer-1\"){\nnodes{\npaths{\nstatus\nuptime}}}}}}}}}"}`
-	ValidQueryWithMixedResponse      = "query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\nrouter{\npeers(names:\"peer-1\"){\nnodes{\npaths{\nstatus\nuptime}}}}}}}}}"
-	InvalidRouterExpectedRequest     = `{"query":"query {\nallRouters(name:\"not-a-router\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}}}}}}"}`
-	InvalidRouterQuery               = "query {\nallRouters(name:\"not-a-router\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}}}}}}"
-	InvalidFieldExpectedRequest      = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ninvalid-field\ntest-tag}}}}}}}"}`
-	InvalidFieldQuery                = "query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ninvalid-field\ntest-tag}}}}}}}"
+	InvalidRouterExpectedRequest          = `{"query":"query {\nallRouters(name:\"not-a-router\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}}}}}}"}`
+	InvalidFieldExpectedRequest           = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ninvalid-field\ntest-tag}}}}}}}"}`
+)
+
+var (
+	ValidQuerySingleTag         = ValidExpectedRequestSingleTag[10 : len(ValidExpectedRequestSingleTag)-2]
+	ValidQueryNoTag             = ValidExpectedRequestNoTag[10 : len(ValidExpectedRequestNoTag)-2]
+	ValidQueryWithAbsPaths      = ValidExpectedRequestWithAbsPaths[10 : len(ValidExpectedRequestWithAbsPaths)-2]
+	ValidQueryWithMixedResponse = ValidExpectedRequestWithMixedResponse[10 : len(ValidExpectedRequestWithMixedResponse)-2]
+	InvalidRouterQuery          = InvalidRouterExpectedRequest[10 : len(InvalidRouterExpectedRequest)-2]
+	InvalidFieldQuery           = InvalidFieldExpectedRequest[10 : len(InvalidFieldExpectedRequest)-2]
 )
 
 var CollectorTestCases = []struct {
@@ -132,8 +134,8 @@ var CollectorTestCases = []struct {
 				}]
 			}]
 		  }`},
-		ExpectedMetrics:  nil,
-		ExpectedErrors:   []string{
+		ExpectedMetrics: nil,
+		ExpectedErrors: []string{
 			"found errors in response for collector test-collector: Cannot query field \"invalid-field\" on type \"ArpEntryType\".",
 			"no data found in response for collector test-collector",
 		},
@@ -303,10 +305,10 @@ var CollectorTestCases = []struct {
 		Name:       "mixed produces errors and response",
 		EntryPoint: "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/router/peers(names:'peer-1')/nodes",
 		Fields: map[string]string{
-			"status":       "paths/status",
+			"status": "paths/status",
 		},
 		Tags: map[string]string{
-			"uptime":       "paths/uptime",
+			"uptime": "paths/uptime",
 		},
 		Query: ValidQueryWithMixedResponse,
 		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestWithMixedResponse, `{
@@ -369,7 +371,7 @@ var CollectorTestCases = []struct {
 		ExpectedMetrics: []*testutil.Metric{
 			{
 				Measurement: "test-collector",
-				Tags: map[string]string{},
+				Tags:        map[string]string{},
 				Fields: map[string]interface{}{
 					"status": "UP",
 				},
