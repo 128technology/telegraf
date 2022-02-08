@@ -23,7 +23,7 @@ type Endpoint struct {
 }
 
 const (
-	ValidExpectedRequestSingleTag         = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}}}}}}"}`
+	ValidExpectedRequest                  = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}}}}}}"}`
 	ValidExpectedRequestNoTag             = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field}}}}}}}"}`
 	ValidExpectedRequestWithAbsPaths      = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nname\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}\nname}}}}}"}`
 	ValidExpectedRequestWithMixedResponse = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\nrouter{\npeers(names:\"peer-1\"){\nnodes{\npaths{\nstatus\nuptime}}}}}}}}}"}`
@@ -32,7 +32,7 @@ const (
 )
 
 var (
-	ValidQuerySingleTag         = ValidExpectedRequestSingleTag[10 : len(ValidExpectedRequestSingleTag)-2]
+	ValidQuery                  = ValidExpectedRequest[10 : len(ValidExpectedRequest)-2]
 	ValidQueryNoTag             = ValidExpectedRequestNoTag[10 : len(ValidExpectedRequestNoTag)-2]
 	ValidQueryWithAbsPaths      = ValidExpectedRequestWithAbsPaths[10 : len(ValidExpectedRequestWithAbsPaths)-2]
 	ValidQueryWithMixedResponse = ValidExpectedRequestWithMixedResponse[10 : len(ValidExpectedRequestWithMixedResponse)-2]
@@ -85,8 +85,8 @@ var CollectorTestCases = []struct {
 		EntryPoint:      "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
 		Fields:          map[string]string{"test-field": "test-field"},
 		Tags:            map[string]string{"test-tag": "test-tag"},
-		Query:           ValidQuerySingleTag,
-		Endpoint:        Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestSingleTag, "{}"},
+		Query:           ValidQuery,
+		Endpoint:        Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequest, "{}"},
 		ExpectedMetrics: nil,
 		ExpectedErrors: []string{
 			"no data found in response for collector test-collector",
@@ -111,8 +111,8 @@ var CollectorTestCases = []struct {
 		EntryPoint:       "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
 		Fields:           map[string]string{"test-field": "test-field"},
 		Tags:             map[string]string{"test-tag": "test-tag"},
-		Query:            ValidQuerySingleTag,
-		Endpoint:         Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestSingleTag, `{"test": }`},
+		Query:            ValidQuery,
+		Endpoint:         Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequest, `{"test": }`},
 		ExpectedMetrics:  nil,
 		ExpectedErrors:   []string{"invalid json response for collector test-collector: invalid character '}' looking for beginning of value"},
 		ExpectedRequests: []int{1},
@@ -224,8 +224,8 @@ var CollectorTestCases = []struct {
 		EntryPoint: "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
 		Fields:     map[string]string{"test-field": "test-field"},
 		Tags:       map[string]string{"test-tag": "test-tag"},
-		Query:      ValidQuerySingleTag,
-		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestSingleTag, `{
+		Query:      ValidQuery,
+		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequest, `{
 			"data": {
 				"allRouters": {
 				  	"nodes": [{
