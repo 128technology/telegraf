@@ -39,19 +39,6 @@ func newM2() telegraf.Metric {
 	return m2
 }
 
-func newM3() telegraf.Metric {
-	m3, _ := metric.New("stats-process-name",
-		map[string]string{
-			"cmdline":   "",
-			"node": "home",
-		},
-		map[string]interface{}{
-		},
-		time.Now(),
-	)
-	return m3
-}
-
 func TestFieldConversions(t *testing.T) {
 	tests := []struct {
 		message        string
@@ -109,55 +96,44 @@ func TestTagConversions(t *testing.T) {
 		converter    converter
 		expectedTags map[string]string
 	}{
-		// {
-		// 	message: "Should change existing tag",
-		// 	converter: converter{
-		// 		Key:         "resp_code",
-		// 		Pattern:     "^(\\d)\\d\\d$",
-		// 		Replacement: "${1}xx",
-		// 	},
-		// 	expectedTags: map[string]string{
-		// 		"verb":      "GET",
-		// 		"resp_code": "2xx",
-		// 	},
-		// },
-		// {
-		// 	message: "Should append to existing tag",
-		// 	converter: converter{
-		// 		Key:         "verb",
-		// 		Pattern:     "^(.*)$",
-		// 		Replacement: " (${1})",
-		// 		ResultKey:   "resp_code",
-		// 		Append:      true,
-		// 	},
-		// 	expectedTags: map[string]string{
-		// 		"verb":      "GET",
-		// 		"resp_code": "200 (GET)",
-		// 	},
-		// },
-		// {
-		// 	message: "Should add new tag",
-		// 	converter: converter{
-		// 		Key:         "resp_code",
-		// 		Pattern:     "^(\\d)\\d\\d$",
-		// 		Replacement: "${1}xx",
-		// 		ResultKey:   "resp_code_group",
-		// 	},
-		// 	expectedTags: map[string]string{
-		// 		"verb":            "GET",
-		// 		"resp_code":       "200",
-		// 		"resp_code_group": "2xx",
-		// 	},
-		// },
 		{
-			message: "process metrics",
+			message: "Should change existing tag",
 			converter: converter{
-				Key:         "cmdline",
-				Pattern:     "^(.*python[\\d.]*.\\s)*(((?P<par>[\\w-/]+)\\.par)|((\\S+/)*(?P<telegraf>telegraf)(.*?(?P<conf>/[\\w.-]+)\\.conf))|((\\S+/)*(?P<process>[\\w.-]+))).*",
-				Replacement: "${process}${par}${telegraf}${conf}",
-				ResultKey:   "process-name",
+				Key:         "resp_code",
+				Pattern:     "^(\\d)\\d\\d$",
+				Replacement: "${1}xx",
 			},
 			expectedTags: map[string]string{
+				"verb":      "GET",
+				"resp_code": "2xx",
+			},
+		},
+		{
+			message: "Should append to existing tag",
+			converter: converter{
+				Key:         "verb",
+				Pattern:     "^(.*)$",
+				Replacement: " (${1})",
+				ResultKey:   "resp_code",
+				Append:      true,
+			},
+			expectedTags: map[string]string{
+				"verb":      "GET",
+				"resp_code": "200 (GET)",
+			},
+		},
+		{
+			message: "Should add new tag",
+			converter: converter{
+				Key:         "resp_code",
+				Pattern:     "^(\\d)\\d\\d$",
+				Replacement: "${1}xx",
+				ResultKey:   "resp_code_group",
+			},
+			expectedTags: map[string]string{
+				"verb":            "GET",
+				"resp_code":       "200",
+				"resp_code_group": "2xx",
 			},
 		},
 	}
@@ -168,14 +144,15 @@ func TestTagConversions(t *testing.T) {
 			test.converter,
 		}
 
-		processed := regex.Apply(newM3())
+		processed := regex.Apply(newM1())
 
-		// expectedFields := map[string]interface{}{
-		// }
+		expectedFields := map[string]interface{}{
+			"request": "/users/42/",
+		}
 
-		// assert.Equal(t, expectedFields, processed[0].Fields(), test.message, "Should not change fields")
+		assert.Equal(t, expectedFields, processed[0].Fields(), test.message, "Should not change fields")
 		assert.Equal(t, test.expectedTags, processed[0].Tags(), test.message)
-		// assert.Equal(t, "access_log", processed[0].Name(), "Should not change name")
+		assert.Equal(t, "access_log", processed[0].Name(), "Should not change name")
 	}
 }
 
