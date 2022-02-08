@@ -177,7 +177,7 @@ func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 	//look for other errors in response
 	exists := jsonParsed.Exists("errors")
 	if exists {
-		template := fmt.Sprintf("unexpected response for collector %s", plugin.CollectorName) + ": %s"
+		template := fmt.Sprintf("found errors in response for collector %s", plugin.CollectorName) + ": %s"
 		for _, err := range decodeAndReportJSONErrors(message, template) {
 			acc.AddError(err)
 
@@ -189,13 +189,12 @@ func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 				}
 			}
 		}
-		return nil
 	}
 
 	//look for empty response
 	dataExists := jsonParsed.Exists("data")
 	if !dataExists {
-		acc.AddError(fmt.Errorf("empty response for collector %s: %s", plugin.CollectorName, jsonParsed.String()))
+		acc.AddError(fmt.Errorf("no data found in response for collector %s", plugin.CollectorName))
 		return nil
 	}
 
