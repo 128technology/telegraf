@@ -48,6 +48,8 @@ var CollectorTestCases = []struct {
 	InitError        bool
 	Query            string
 	Endpoint         Endpoint
+	Timeout          internal.Duration
+	Deadline         internal.Duration
 	ExpectedMetrics  []*testutil.Metric
 	ExpectedErrors   []string
 	RetryIfNotFound  bool
@@ -66,6 +68,16 @@ var CollectorTestCases = []struct {
 		EntryPoint:       "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
 		Fields:           nil,
 		Tags:             nil,
+		InitError:        true,
+		ExpectedRequests: []int{0},
+	},
+	{
+		Name: "fails init if deadline is greater than timeout",
+		EntryPoint:      "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
+		Fields:          map[string]string{"test-field": "test-field"},
+		Tags:            map[string]string{"test-tag": "test-tag"},
+		Timeout:         internal.Duration{Duration: time.Second * 5},
+		Deadline:        internal.Duration{Duration: time.Second * 10},
 		InitError:        true,
 		ExpectedRequests: []int{0},
 	},
@@ -397,6 +409,14 @@ func TestT128GraphqlCollector(t *testing.T) {
 				Fields:          testCase.Fields,
 				Tags:            testCase.Tags,
 				RetryIfNotFound: testCase.RetryIfNotFound,
+			}
+
+			if testCase.Timeout.Duration != 0 {
+				plugin.Timeout = testCase.Timeout
+			}
+
+			if testCase.Deadline.Duration != 0 {
+				plugin.Deadline = testCase.Deadline
 			}
 
 			var acc testutil.Accumulator

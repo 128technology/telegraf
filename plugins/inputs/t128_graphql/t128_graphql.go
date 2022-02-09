@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"math"
 	"net"
 	"net/http"
 	"regexp"
@@ -22,6 +23,9 @@ import (
 const (
 	//DefaultRequestTimeout is the request timeout if none is configured
 	DefaultRequestTimeout = time.Second * 5
+
+	//DefaultDeadline is the time for the graphQL server to build the response. Default is no deadline.
+	DefaultDeadline = time.Second * math.MaxInt32
 )
 
 //T128GraphQL is an input for metrics of a 128T router instance
@@ -34,6 +38,7 @@ type T128GraphQL struct {
 	Tags            map[string]string `toml:"extract_tags"`
 	Timeout         internal.Duration `toml:"timeout"`
 	RetryIfNotFound bool              `toml:"retry_if_not_found"`
+	Deadline        internal.Duration `toml:"deadline"`
 
 	Config           *Config
 	Query            string
@@ -132,6 +137,10 @@ func (plugin *T128GraphQL) checkConfig() error {
 		return fmt.Errorf("extract_fields is a required configuration field")
 	}
 
+	if plugin.Deadline.Duration != DefaultDeadline && plugin.Deadline.Duration.Seconds() > plugin.Timeout.Duration.Seconds() {
+		return fmt.Errorf("deadline cannot be greater than timeout")
+	}
+
 	return nil
 }
 
@@ -222,6 +231,11 @@ func (plugin *T128GraphQL) createRequest() (*http.Request, error) {
 
 	request.Header.Add("Content-Type", "application/json")
 
+	if plugin.Deadline.Duration != DefaultDeadline {
+		deadline := int(plugin.Deadline.Duration.Truncate(time.Second))
+		request.Header.Add("deadline", fmt.Sprintf("%x", deadline))
+	}
+
 	return request, nil
 }
 
@@ -286,6 +300,7 @@ func init() {
 	inputs.Add("t128_graphql", func() telegraf.Input {
 		return &T128GraphQL{
 			Timeout: internal.Duration{Duration: DefaultRequestTimeout},
+			Deadline: internal.Duration{Duration: DefaultDeadline},
 		}
 	})
 }
