@@ -21,7 +21,13 @@ import (
 
 const (
 	//DefaultRequestTimeout is the request timeout if none is configured
-	DefaultRequestTimeout = time.Second * 5
+	DefaultRequestTimeout = 5 * time.Second
+
+	//DefaultDeadline is the time for the graphQL server to build the response. Default is no deadline.
+	DefaultDeadline = 0 * time.Second
+
+	//MinTimeoutDeadlineDiff is the minimum value of plugin.Timeout - plugin.Deadline
+	MinTimeoutDeadlineDiff = 1 * time.Second
 )
 
 //T128GraphQL is an input for metrics of a 128T router instance
@@ -34,6 +40,7 @@ type T128GraphQL struct {
 	Tags            map[string]string `toml:"extract_tags"`
 	Timeout         internal.Duration `toml:"timeout"`
 	RetryIfNotFound bool              `toml:"retry_if_not_found"`
+	Deadline        internal.Duration `toml:"deadline"`
 
 	Config           *Config
 	Query            string
@@ -132,6 +139,17 @@ func (plugin *T128GraphQL) checkConfig() error {
 		return fmt.Errorf("extract_fields is a required configuration field")
 	}
 
+	if plugin.Deadline.Duration != DefaultDeadline {
+		timeoutDeadlineDiff := plugin.Timeout.Duration.Seconds() - plugin.Deadline.Duration.Seconds()
+		if timeoutDeadlineDiff < MinTimeoutDeadlineDiff.Seconds() {
+			return fmt.Errorf(
+				"timeout must be at least %d seconds greater than deadline: currently %d seconds greater",
+				int(MinTimeoutDeadlineDiff.Seconds()),
+				int(timeoutDeadlineDiff),
+			)
+		}
+	}
+
 	return nil
 }
 
@@ -177,7 +195,7 @@ func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 	//look for other errors in response
 	exists := jsonParsed.Exists("errors")
 	if exists {
-		template := fmt.Sprintf("unexpected response for collector %s", plugin.CollectorName) + ": %s"
+		template := fmt.Sprintf("found errors in response for collector %s", plugin.CollectorName) + ": %s"
 		for _, err := range decodeAndReportJSONErrors(message, template) {
 			acc.AddError(err)
 
@@ -189,13 +207,12 @@ func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 				}
 			}
 		}
-		return nil
 	}
 
 	//look for empty response
 	dataExists := jsonParsed.Exists("data")
 	if !dataExists {
-		acc.AddError(fmt.Errorf("empty response for collector %s: %s", plugin.CollectorName, jsonParsed.String()))
+		acc.AddError(fmt.Errorf("no data found in response for collector %s", plugin.CollectorName))
 		return nil
 	}
 
@@ -222,6 +239,11 @@ func (plugin *T128GraphQL) createRequest() (*http.Request, error) {
 	}
 
 	request.Header.Add("Content-Type", "application/json")
+
+	if plugin.Deadline.Duration != DefaultDeadline {
+		deadline := int(plugin.Deadline.Duration.Truncate(time.Second))
+		request.Header.Add("deadline", fmt.Sprintf("%d", deadline))
+	}
 
 	return request, nil
 }
@@ -286,7 +308,8 @@ func validateAndSeparatePaths(data map[string]string, entryPoint string) (map[st
 func init() {
 	inputs.Add("t128_graphql", func() telegraf.Input {
 		return &T128GraphQL{
-			Timeout: internal.Duration{Duration: DefaultRequestTimeout},
+			Timeout:  internal.Duration{Duration: DefaultRequestTimeout},
+			Deadline: internal.Duration{Duration: DefaultDeadline},
 		}
 	})
 }
