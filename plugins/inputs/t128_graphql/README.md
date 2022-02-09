@@ -30,7 +30,7 @@ The graphql input plugin collects data from a 128T instance via graphQL.
 
 ## Amount of time for graphQL server to collect and return data. After deadline, partial responses
 ## are returned. Default is no deadline. Deadline cannot be greater than timeout.
-# deadline = "5s"
+# deadline = "0s"
 
 ## Required. The fields to collect with the desired name as the key (left) and the graphQL
 ## query path as the value (right). The path can be relative to the entry point or an absolute

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"math"
 	"net"
 	"net/http"
 	"regexp"
@@ -25,7 +24,10 @@ const (
 	DefaultRequestTimeout = time.Second * 5
 
 	//DefaultDeadline is the time for the graphQL server to build the response. Default is no deadline.
-	DefaultDeadline = time.Second * math.MaxInt32
+	DefaultDeadline = time.Second * 0
+
+	//MinTimeoutDeadlineDiff is the minimum value of plugin.Timeout - plugin.Deadline
+	MinTimeoutDeadlineDiff = time.Second * 3
 )
 
 //T128GraphQL is an input for metrics of a 128T router instance
@@ -137,8 +139,15 @@ func (plugin *T128GraphQL) checkConfig() error {
 		return fmt.Errorf("extract_fields is a required configuration field")
 	}
 
-	if plugin.Deadline.Duration != DefaultDeadline && plugin.Deadline.Duration.Seconds() > plugin.Timeout.Duration.Seconds() {
-		return fmt.Errorf("deadline cannot be greater than timeout")
+	if plugin.Deadline.Duration != DefaultDeadline {
+		timeoutDeadlineDiff := plugin.Timeout.Duration.Seconds() - plugin.Deadline.Duration.Seconds()
+		if timeoutDeadlineDiff < MinTimeoutDeadlineDiff.Seconds() {
+			return fmt.Errorf(
+				"timeout must be at least %d seconds greater than deadline: currently %d seconds",
+				int(MinTimeoutDeadlineDiff.Seconds()),
+				int(timeoutDeadlineDiff),
+			)
+		}
 	}
 
 	return nil
@@ -233,7 +242,7 @@ func (plugin *T128GraphQL) createRequest() (*http.Request, error) {
 
 	if plugin.Deadline.Duration != DefaultDeadline {
 		deadline := int(plugin.Deadline.Duration.Truncate(time.Second))
-		request.Header.Add("deadline", fmt.Sprintf("%x", deadline))
+		request.Header.Add("deadline", fmt.Sprintf("%d", deadline))
 	}
 
 	return request, nil
@@ -299,7 +308,7 @@ func validateAndSeparatePaths(data map[string]string, entryPoint string) (map[st
 func init() {
 	inputs.Add("t128_graphql", func() telegraf.Input {
 		return &T128GraphQL{
-			Timeout: internal.Duration{Duration: DefaultRequestTimeout},
+			Timeout:  internal.Duration{Duration: DefaultRequestTimeout},
 			Deadline: internal.Duration{Duration: DefaultDeadline},
 		}
 	})
