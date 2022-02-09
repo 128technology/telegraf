@@ -21,13 +21,13 @@ import (
 
 const (
 	//DefaultRequestTimeout is the request timeout if none is configured
-	DefaultRequestTimeout = time.Second * 5
+	DefaultRequestTimeout = 5 * time.Second
 
 	//DefaultDeadline is the time for the graphQL server to build the response. Default is no deadline.
-	DefaultDeadline = time.Second * 0
+	DefaultDeadline = 0 * time.Second
 
 	//MinTimeoutDeadlineDiff is the minimum value of plugin.Timeout - plugin.Deadline
-	MinTimeoutDeadlineDiff = time.Second * 3
+	MinTimeoutDeadlineDiff = 1 * time.Second
 )
 
 //T128GraphQL is an input for metrics of a 128T router instance
@@ -143,7 +143,7 @@ func (plugin *T128GraphQL) checkConfig() error {
 		timeoutDeadlineDiff := plugin.Timeout.Duration.Seconds() - plugin.Deadline.Duration.Seconds()
 		if timeoutDeadlineDiff < MinTimeoutDeadlineDiff.Seconds() {
 			return fmt.Errorf(
-				"timeout must be at least %d seconds greater than deadline: currently %d seconds",
+				"timeout must be at least %d seconds greater than deadline: currently %d seconds greater",
 				int(MinTimeoutDeadlineDiff.Seconds()),
 				int(timeoutDeadlineDiff),
 			)

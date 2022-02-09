@@ -29,7 +29,7 @@ The graphql input plugin collects data from a 128T instance via graphQL.
 # retry_if_not_found = false
 
 ## Amount of time for graphQL server to collect and return data. After deadline, partial responses
-## are returned. Default is no deadline. Deadline cannot be greater than timeout.
+## are returned. Default is no deadline. Deadline must be at least 1 second less than timeout.
 # deadline = "0s"
 
 ## Required. The fields to collect with the desired name as the key (left) and the graphQL

@@ -72,7 +72,7 @@ var CollectorTestCases = []struct {
 		ExpectedRequests: []int{0},
 	},
 	{
-		Name:             "fails init if deadline is too close too timeout",
+		Name:             "fails init if deadline is too close to timeout",
 		EntryPoint:       "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
 		Fields:           map[string]string{"test-field": "test-field"},
 		Tags:             map[string]string{"test-tag": "test-tag"},
