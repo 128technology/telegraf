@@ -13,7 +13,6 @@ import (
 
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/inputs"
-	"github.com/shirou/gopsutil/v3/process"
 )
 
 var (
@@ -219,38 +218,6 @@ func (p *Procstat) addMetric(proc Process, acc telegraf.Accumulator, t time.Time
 		}
 	}
 
-	numThreads, err := proc.NumThreads()
-	if err == nil {
-		fields[prefix+"num_threads"] = numThreads
-	}
-
-	fds, err := proc.NumFDs()
-	if err == nil {
-		fields[prefix+"num_fds"] = fds
-	}
-
-	ctx, err := proc.NumCtxSwitches()
-	if err == nil {
-		fields[prefix+"voluntary_context_switches"] = ctx.Voluntary
-		fields[prefix+"involuntary_context_switches"] = ctx.Involuntary
-	}
-
-	faults, err := proc.PageFaults()
-	if err == nil {
-		fields[prefix+"minor_faults"] = faults.MinorFaults
-		fields[prefix+"major_faults"] = faults.MajorFaults
-		fields[prefix+"child_minor_faults"] = faults.ChildMinorFaults
-		fields[prefix+"child_major_faults"] = faults.ChildMajorFaults
-	}
-
-	io, err := proc.IOCounters()
-	if err == nil {
-		fields[prefix+"read_count"] = io.ReadCount
-		fields[prefix+"write_count"] = io.WriteCount
-		fields[prefix+"read_bytes"] = io.ReadBytes
-		fields[prefix+"write_bytes"] = io.WriteBytes
-	}
-
 	createdAt, err := proc.CreateTime() //Returns epoch in ms
 	if err == nil {
 		fields[prefix+"created_at"] = createdAt * 1000000 //Convert ms to ns
@@ -287,50 +254,6 @@ func (p *Procstat) addMetric(proc Process, acc telegraf.Accumulator, t time.Time
 		fields[prefix+"memory_data"] = mem.Data
 		fields[prefix+"memory_stack"] = mem.Stack
 		fields[prefix+"memory_locked"] = mem.Locked
-	}
-
-	memPerc, err := proc.MemoryPercent()
-	if err == nil {
-		fields[prefix+"memory_usage"] = memPerc
-	}
-
-	rlims, err := proc.RlimitUsage(true)
-	if err == nil {
-		for _, rlim := range rlims {
-			var name string
-			switch rlim.Resource {
-			case process.RLIMIT_CPU:
-				name = "cpu_time"
-			case process.RLIMIT_DATA:
-				name = "memory_data"
-			case process.RLIMIT_STACK:
-				name = "memory_stack"
-			case process.RLIMIT_RSS:
-				name = "memory_rss"
-			case process.RLIMIT_NOFILE:
-				name = "num_fds"
-			case process.RLIMIT_MEMLOCK:
-				name = "memory_locked"
-			case process.RLIMIT_AS:
-				name = "memory_vms"
-			case process.RLIMIT_LOCKS:
-				name = "file_locks"
-			case process.RLIMIT_SIGPENDING:
-				name = "signals_pending"
-			case process.RLIMIT_NICE:
-				name = "nice_priority"
-			case process.RLIMIT_RTPRIO:
-				name = "realtime_priority"
-			default:
-				continue
-			}
-
-			fields[prefix+"rlimit_"+name+"_soft"] = rlim.Soft
-			fields[prefix+"rlimit_"+name+"_hard"] = rlim.Hard
-			if name != "file_locks" { // gopsutil doesn't currently track the used file locks count
-				fields[prefix+name] = rlim.Used
-			}
-		}
 	}
 
 	ppid, err := proc.Ppid()
