@@ -13,6 +13,7 @@ import (
 
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/inputs"
+	"github.com/shirou/gopsutil/process"
 )
 
 var (
@@ -256,6 +257,50 @@ func (p *Procstat) addMetric(proc Process, acc telegraf.Accumulator, t time.Time
 		fields[prefix+"memory_locked"] = mem.Locked
 	}
 
+	memPerc, err := proc.MemoryPercent()
+	if err == nil {
+		fields[prefix+"memory_usage"] = memPerc
+	}
+
+	rlims, err := proc.RlimitUsage(true)
+	if err == nil {
+		for _, rlim := range rlims {
+			var name string
+			switch rlim.Resource {
+			case process.RLIMIT_CPU:
+				name = "cpu_time"
+			case process.RLIMIT_DATA:
+				name = "memory_data"
+			case process.RLIMIT_STACK:
+				name = "memory_stack"
+			case process.RLIMIT_RSS:
+				name = "memory_rss"
+			case process.RLIMIT_NOFILE:
+				name = "num_fds"
+			case process.RLIMIT_MEMLOCK:
+				name = "memory_locked"
+			case process.RLIMIT_AS:
+				name = "memory_vms"
+			case process.RLIMIT_LOCKS:
+				name = "file_locks"
+			case process.RLIMIT_SIGPENDING:
+				name = "signals_pending"
+			case process.RLIMIT_NICE:
+				name = "nice_priority"
+			case process.RLIMIT_RTPRIO:
+				name = "realtime_priority"
+			default:
+				continue
+			}
+
+			fields[prefix+"rlimit_"+name+"_soft"] = rlim.Soft
+			fields[prefix+"rlimit_"+name+"_hard"] = rlim.Hard
+			if name != "file_locks" { // gopsutil doesn't currently track the used file locks count
+				fields[prefix+name] = rlim.Used
+			}
+		}
+	}
+
 	ppid, err := proc.Ppid()
 	if err == nil {
 		fields[prefix+"ppid"] = ppid
@@ -494,5 +539,9 @@ func (p *Procstat) Init() error {
 func init() {
 	inputs.Add("procstat", func() telegraf.Input {
 		return &Procstat{}
+	})
+
+	inputs.Add("t128_procstat", func() telegraf.Input {
+		return &T128Procstat{}
 	})
 }

@@ -172,6 +172,7 @@ require (
 	github.com/openzipkin-contrib/zipkin-go-opentracing v0.4.5
 	github.com/openzipkin/zipkin-go v0.2.5
 	github.com/pion/dtls/v2 v2.1.5
+	github.com/shirou/gopsutil v3.21.5+incompatible
 )
 
 require (
@@ -198,6 +199,7 @@ require (
 	github.com/Azure/go-ntlmssp v0.0.0-20200615164410-66371956d46c // indirect
 	github.com/Microsoft/go-winio v0.4.17 // indirect
 	github.com/Microsoft/hcsshim v0.8.24 // indirect
+	github.com/StackExchange/wmi v1.2.1 // indirect
 	github.com/alecthomas/participle v0.4.1 // indirect
 	github.com/apache/arrow/go/arrow v0.0.0-20211006091945-a69884db78f4 // indirect
 	github.com/aristanetworks/glog v0.0.0-20191112221043-67e8567f59f3 // indirect
