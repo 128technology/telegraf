@@ -27,7 +27,7 @@ const (
 	timeoutDeadlineDiff = 1 * time.Second
 )
 
-//T128GraphQL is an input for metrics of a 128T router instance
+// T128GraphQL is an input for metrics of a 128T router instance
 type T128GraphQL struct {
 	CollectorName   string            `toml:"collector_name"`
 	BaseURL         string            `toml:"base_url"`
@@ -45,17 +45,17 @@ type T128GraphQL struct {
 	endpointNotFound bool
 }
 
-//SampleConfig returns the default configuration of the Input
+// SampleConfig returns the default configuration of the Input
 func (*T128GraphQL) SampleConfig() string {
 	return sampleConfig
 }
 
-//Description returns a one-sentence description on the Input
+// Description returns a one-sentence description on the Input
 func (*T128GraphQL) Description() string {
 	return "Make a 128T GraphQL query and return the data"
 }
 
-//Init sets up the input to be ready for action
+// Init sets up the input to be ready for action
 func (plugin *T128GraphQL) Init() error {
 	//check and load config
 	err := plugin.checkConfig()
@@ -138,22 +138,42 @@ func (plugin *T128GraphQL) checkConfig() error {
 	return nil
 }
 
-//Gather takes in an accumulator and adds the metrics that the Input gathers
+// Gather takes in an accumulator and adds the metrics that the Input gathers
 func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 	if !plugin.RetryIfNotFound && plugin.endpointNotFound {
 		return nil
 	}
+	processedResponses, err := plugin.MakeRequest()
+	if err != nil {
+		for _, err := range err {
+			acc.AddError(err)
+		}
+	}
+	for _, processedResponse := range processedResponses {
+		acc.AddFields(
+			plugin.CollectorName,
+			processedResponse.Fields,
+			processedResponse.Tags,
+		)
+	}
+
+	return nil
+}
+
+// MakeRequest can be used by other plugins using GraphQL functionality
+func (plugin *T128GraphQL) MakeRequest() ([]*ProcessedResponse, []error) {
+	var errs []error
 
 	request, err := plugin.createRequest()
 	if err != nil {
-		acc.AddError(fmt.Errorf("failed to create a request for query %s: %w", plugin.Query, err))
-		return nil
+		errs = append(errs, fmt.Errorf("failed to create a request for query %s: %w", plugin.Query, err))
+		return nil, errs
 	}
 
 	response, err := plugin.client.Do(request)
 	if err != nil {
-		acc.AddError(fmt.Errorf("failed to make graphQL request for collector %s: %w", plugin.CollectorName, err))
-		return nil
+		errs = append(errs, fmt.Errorf("failed to make graphQL request for collector %s: %w", plugin.CollectorName, err))
+		return nil, errs
 	}
 	defer response.Body.Close()
 
@@ -165,16 +185,16 @@ func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		template := fmt.Sprintf("status code %d not OK for collector ", response.StatusCode) + plugin.CollectorName + ": %s"
 		for _, err := range decodeAndReportJSONErrors(message, template) {
-			acc.AddError(err)
+			errs = append(errs, err)
 		}
-		return nil
+		return nil, errs
 	}
 
 	//decode json
 	jsonParsed, err := gabs.ParseJSON(message)
 	if err != nil {
-		acc.AddError(fmt.Errorf("invalid json response for collector %s: %w", plugin.CollectorName, err))
-		return nil
+		errs = append(errs, fmt.Errorf("invalid json response for collector %s: %w", plugin.CollectorName, err))
+		return nil, errs
 	}
 
 	//look for other errors in response
@@ -182,13 +202,13 @@ func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 	if exists {
 		template := fmt.Sprintf("found errors in response for collector %s", plugin.CollectorName) + ": %s"
 		for _, err := range decodeAndReportJSONErrors(message, template) {
-			acc.AddError(err)
+			errs = append(errs, err)
 
 			if strings.Contains(err.Error(), "returned a 404") {
 				plugin.endpointNotFound = true
 
 				if !plugin.RetryIfNotFound {
-					acc.AddError(errors.New("collector configured to not retry when endpoint not found (404), stopping queries"))
+					errs = append(errs, errors.New("collector configured to not retry when endpoint not found (404), stopping queries"))
 				}
 			}
 		}
@@ -197,24 +217,18 @@ func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 	//look for empty response
 	dataExists := jsonParsed.Exists("data")
 	if !dataExists {
-		acc.AddError(fmt.Errorf("no data found in response for collector %s", plugin.CollectorName))
-		return nil
+		errs = append(errs, fmt.Errorf("no data found in response for collector %s", plugin.CollectorName))
+		return nil, errs
 	}
-
 	processedResponses, err := ProcessResponse(jsonParsed, plugin.CollectorName, plugin.Config.Fields, plugin.Config.Tags)
 	if err != nil {
-		acc.AddError(err)
-		return nil
+		errs = append(errs, err)
+		return nil, errs
+	} else if dataExists && exists {
+		return processedResponses, errs
+	} else {
+		return processedResponses, nil
 	}
-
-	for _, processedResponse := range processedResponses {
-		acc.AddFields(
-			plugin.CollectorName,
-			processedResponse.Fields,
-			processedResponse.Tags,
-		)
-	}
-	return nil
 }
 
 func (plugin *T128GraphQL) createRequest() (*http.Request, error) {
