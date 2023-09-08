@@ -139,11 +139,7 @@ func (plugin *T128PeerPath) Init() error {
 		RetryIfNotFound: plugin.RetryIfNotFound,
 		Query:           query,
 	}
-	err := plugin.gqlCollector.Init()
-	if err != nil {
-		return err
-	}
-	return nil
+	return plugin.gqlCollector.Init()
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input gathers

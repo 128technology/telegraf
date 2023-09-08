@@ -127,6 +127,53 @@ var CollectorTestCases = []struct {
 		ExpectedRequests: []int{1},
 	},
 	{
+		Name:            "include everything",
+		ExcludeHostname: false,
+		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidPeerPathRequestWithHostName, `{
+				"data": {
+				  "allPeers": {
+					"nodes": [
+					  {
+						"routerName": "NorthEast",
+						"paths": [
+						  {
+							"node": "node1",
+							"adjacentAddress": "10.10.10.10",
+							"adjacentHostname": "fake-peer",
+							"status": "UP",
+							"enabled": true,
+							"deviceInterface": "wan5",
+							"networkInterface": "wan5",
+							"vlan": "0"
+						  }
+						]
+					  }
+					]
+				  }
+				}
+			}`},
+		ExpectedMetrics: []*testutil.Metric{
+			{
+				Measurement: "test-collector",
+				Tags: map[string]string{
+					"adjacentAddress":  "10.10.10.10",
+					"adjacentHostname": "fake-peer",
+					"deviceInterface":  "wan5",
+					"networkInterface": "wan5",
+					"node":             "node1",
+					"vlan":             "0",
+					"routerName":       "NorthEast",
+				},
+				Fields: map[string]interface{}{
+					"status":  "UP",
+					"enabled": true,
+				},
+			},
+		},
+		ExpectedErrors:   []string{},
+		ExpectedRequests: []int{1},
+	},
+	{
 		Name:            "multiple paths",
 		ExcludeHostname: false,
 		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidPeerPathRequestWithHostName, `{
@@ -147,14 +194,14 @@ var CollectorTestCases = []struct {
 								"vlan": "0"
 							  },
 							  {
-	                            "node": "node1",
-	                            "adjacentAddress": "127.117.97.105",
+								"node": "node1",
+								"adjacentAddress": "127.117.97.105",
 								"adjacentHostname": "fake-peer",
-	                            "status": "DOWN",
-	                            "enabled": true,
-	                            "deviceInterface": "wan5",
-	                            "networkInterface": "wan5",
-	                            "vlan": "0"
+								"status": "DOWN",
+								"enabled": true,
+								"deviceInterface": "wan5",
+								"networkInterface": "wan5",
+								"vlan": "0"
 							  }
 							]
 						  }
