@@ -193,6 +193,7 @@ import (
 	_ "github.com/influxdata/telegraf/plugins/inputs/systemd_units"
 	_ "github.com/influxdata/telegraf/plugins/inputs/t128_graphql"
 	_ "github.com/influxdata/telegraf/plugins/inputs/t128_metrics"
+	_ "github.com/influxdata/telegraf/plugins/inputs/t128_peer_path"
 	_ "github.com/influxdata/telegraf/plugins/inputs/tail"
 	_ "github.com/influxdata/telegraf/plugins/inputs/tcp_listener"
 	_ "github.com/influxdata/telegraf/plugins/inputs/teamspeak"
