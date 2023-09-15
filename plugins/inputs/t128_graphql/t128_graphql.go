@@ -27,7 +27,7 @@ const (
 	timeoutDeadlineDiff = 1 * time.Second
 )
 
-//T128GraphQL is an input for metrics of a 128T router instance
+// T128GraphQL is an input for metrics of a 128T router instance
 type T128GraphQL struct {
 	CollectorName   string            `toml:"collector_name"`
 	BaseURL         string            `toml:"base_url"`
@@ -45,17 +45,17 @@ type T128GraphQL struct {
 	endpointNotFound bool
 }
 
-//SampleConfig returns the default configuration of the Input
+// SampleConfig returns the default configuration of the Input
 func (*T128GraphQL) SampleConfig() string {
 	return sampleConfig
 }
 
-//Description returns a one-sentence description on the Input
+// Description returns a one-sentence description on the Input
 func (*T128GraphQL) Description() string {
 	return "Make a 128T GraphQL query and return the data"
 }
 
-//Init sets up the input to be ready for action
+// Init sets up the input to be ready for action
 func (plugin *T128GraphQL) Init() error {
 	//check and load config
 	err := plugin.checkConfig()
@@ -138,7 +138,7 @@ func (plugin *T128GraphQL) checkConfig() error {
 	return nil
 }
 
-//Gather takes in an accumulator and adds the metrics that the Input gathers
+// Gather takes in an accumulator and adds the metrics that the Input gathers
 func (plugin *T128GraphQL) Gather(acc telegraf.Accumulator) error {
 	if !plugin.RetryIfNotFound && plugin.endpointNotFound {
 		return nil

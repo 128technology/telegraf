@@ -30,8 +30,8 @@ var localData map[string]interface{}
 
 // T128Lte is an input for metrics of a 128T router instance
 type T128Lte struct {
-	RouterName string `toml:"router_name"`
-	NodeName   string `toml:"node_name"`
+	RouterName interface{} `toml:"router_name"`
+	NodeName   interface{} `toml:"node_name"`
 }
 
 var sampleConfig = ``
@@ -51,7 +51,14 @@ func (plugin *T128Lte) Init() error {
 	if err != nil {
 		return err
 	}
-
+	plugin.RouterName, err = plugin.getRouterName()
+	if err != nil {
+		return fmt.Errorf("")
+	}
+	plugin.NodeName, err = plugin.getNodeName()
+	if err != nil {
+		return fmt.Errorf("")
+	}
 	return nil
 }
 
