@@ -34,7 +34,7 @@ def build(args):
         subprocess.run(
             build_docker_command(
                 args.docker_file,
-                ["make", "x86_64.rpm"],
+                ["make", "clean", "x86_64.rpm"],
                 interactive=False,
                 env=env,
             ),
@@ -52,7 +52,7 @@ def shell(args):
 def create_docker_env(docker_file):
     try:
         subprocess.check_call(
-            ["docker", "build", "-t", IMAGE_NAME, "-f", docker_file, SCRIPTS]
+            ["docker", "build", "--no-cache","-t", IMAGE_NAME, "-f", docker_file, SCRIPTS]
         )
     except subprocess.CalledProcessError as error:
         print("Failed to build the docker image")
