@@ -26,6 +26,7 @@ func TestSettingConfigWorks(t *testing.T) {
 	[[inputs.execd]]
 		command = ["a", "b", "c"]
 		restart_delay = "1m"
+		timeout = 0
 		signal = "SIGHUP"
 	`
 	conf := config.NewConfig()
@@ -37,6 +38,7 @@ func TestSettingConfigWorks(t *testing.T) {
 	require.EqualValues(t, []string{"a", "b", "c"}, inp.Command)
 	require.EqualValues(t, 1*time.Minute, inp.RestartDelay)
 	require.EqualValues(t, "SIGHUP", inp.Signal)
+	require.EqualValues(t, 0, inp.Timeout)
 }
 
 func TestExternalInputWorks(t *testing.T) {

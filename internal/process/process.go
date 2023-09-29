@@ -132,7 +132,7 @@ func (p *Process) cmdLoop(ctx context.Context, timeout time.Duration) error {
 			return nil
 		case <-time.After(p.RestartDelay):
 			// Continue the loop and restart the process
-			if err := p.cmdStart(); err != nil {
+			if err := p.cmdStart(timeout); err != nil {
 				return err
 			}
 		}
