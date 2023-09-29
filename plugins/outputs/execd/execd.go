@@ -21,6 +21,9 @@ const sampleConfig = `
   ## Delay before the process is restarted after an unexpected termination
   restart_delay = "10s"
 
+  ## Timeout 
+  timeout = 0
+
   ## Data format to export.
   ## Each data format has its own unique set of configuration options, read
   ## more about them here:
@@ -31,6 +34,7 @@ const sampleConfig = `
 type Execd struct {
 	Command      []string        `toml:"command"`
 	RestartDelay config.Duration `toml:"restart_delay"`
+	Timeout      time.Duration   `toml:"timeout"`
 	Log          telegraf.Logger
 
 	process    *process.Process
@@ -69,7 +73,7 @@ func (e *Execd) Init() error {
 }
 
 func (e *Execd) Connect() error {
-	if err := e.process.Start(); err != nil {
+	if err := e.process.Start(e.Timeout); err != nil {
 		// if there was only one argument, and it contained spaces, warn the user
 		// that they may have configured it wrong.
 		if len(e.Command) == 1 && strings.Contains(e.Command[0], " ") {

@@ -34,6 +34,9 @@ const sampleConfig = `
   ## Delay before the process is restarted after an unexpected termination
   restart_delay = "10s"
 
+  ## Timeout 
+  timeout = 0
+
   ## Data format to consume.
   ## Each data format has its own unique set of configuration options, read
   ## more about them here:
@@ -46,6 +49,7 @@ type Execd struct {
 	Signal       string          `toml:"signal"`
 	RestartDelay config.Duration `toml:"restart_delay"`
 	Log          telegraf.Logger `toml:"-"`
+	Timeout      time.Duration   `toml:"timeout"`
 
 	process *process.Process
 	acc     telegraf.Accumulator
@@ -76,7 +80,7 @@ func (e *Execd) Start(acc telegraf.Accumulator) error {
 	e.process.ReadStdoutFn = e.cmdReadOut
 	e.process.ReadStderrFn = e.cmdReadErr
 
-	if err = e.process.Start(); err != nil {
+	if err = e.process.Start(e.Timeout); err != nil {
 		// if there was only one argument, and it contained spaces, warn the user
 		// that they may have configured it wrong.
 		if len(e.Command) == 1 && strings.Contains(e.Command[0], " ") {

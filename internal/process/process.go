@@ -52,17 +52,17 @@ func New(command []string) (*Process, error) {
 
 // Start the process. A &Process can only be started once. It will restart itself
 // as necessary.
-func (p *Process) Start() error {
+func (p *Process) Start(timeout time.Duration) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
 
-	if err := p.cmdStart(); err != nil {
+	if err := p.cmdStart(timeout); err != nil {
 		return err
 	}
 
 	p.mainLoopWg.Add(1)
 	go func() {
-		if err := p.cmdLoop(ctx); err != nil {
+		if err := p.cmdLoop(ctx, timeout); err != nil {
 			p.Log.Errorf("Process quit with message: %v", err)
 		}
 		p.mainLoopWg.Done()
@@ -82,7 +82,7 @@ func (p *Process) Stop() {
 	p.mainLoopWg.Wait()
 }
 
-func (p *Process) cmdStart() error {
+func (p *Process) cmdStart(timeout time.Duration) error {
 	p.Cmd = exec.Command(p.name, p.args...)
 
 	var err error
@@ -116,9 +116,9 @@ func (p *Process) Pid() int {
 }
 
 // cmdLoop watches an already running process, restarting it when appropriate.
-func (p *Process) cmdLoop(ctx context.Context) error {
+func (p *Process) cmdLoop(ctx context.Context, timeout time.Duration) error {
 	for {
-		err := p.cmdWait(ctx)
+		err := p.cmdWait(ctx, timeout)
 		if isQuitting(ctx) {
 			p.Log.Infof("Process %s shut down", p.Cmd.Path)
 			return nil
@@ -140,7 +140,7 @@ func (p *Process) cmdLoop(ctx context.Context) error {
 }
 
 // cmdWait waits for the process to finish.
-func (p *Process) cmdWait(ctx context.Context) error {
+func (p *Process) cmdWait(ctx context.Context, timeout time.Duration) error {
 	var wg sync.WaitGroup
 
 	if p.ReadStdoutFn == nil {
@@ -169,7 +169,7 @@ func (p *Process) cmdWait(ctx context.Context) error {
 	go func() {
 		select {
 		case <-ctx.Done():
-			gracefulStop(processCtx, p.Cmd, 5*time.Second)
+			gracefulStop(processCtx, p.Cmd, timeout)
 		case <-processCtx.Done():
 		}
 		wg.Done()
