@@ -34,8 +34,8 @@ const sampleConfig = `
   ## Delay before the process is restarted after an unexpected termination
   restart_delay = "10s"
 
-  ## Timeout 
-  timeout = 0
+  ## Timeout in seconds given to process when gracefully shutting down 
+  shutdown_timeout = 5
 
   ## Data format to consume.
   ## Each data format has its own unique set of configuration options, read
@@ -45,11 +45,11 @@ const sampleConfig = `
 `
 
 type Execd struct {
-	Command      []string        `toml:"command"`
-	Signal       string          `toml:"signal"`
-	RestartDelay config.Duration `toml:"restart_delay"`
-	Log          telegraf.Logger `toml:"-"`
-	Timeout      time.Duration   `toml:"timeout"`
+	Command         []string        `toml:"command"`
+	Signal          string          `toml:"signal"`
+	RestartDelay    config.Duration `toml:"restart_delay"`
+	Log             telegraf.Logger `toml:"-"`
+	ShutdownTimeout time.Duration   `toml:"shutdown_timeout"`
 
 	process *process.Process
 	acc     telegraf.Accumulator
@@ -79,8 +79,9 @@ func (e *Execd) Start(acc telegraf.Accumulator) error {
 	e.process.RestartDelay = time.Duration(e.RestartDelay)
 	e.process.ReadStdoutFn = e.cmdReadOut
 	e.process.ReadStderrFn = e.cmdReadErr
+	e.process.shutdownTimeout = e.ShutdownTimeout
 
-	if err = e.process.Start(e.Timeout); err != nil {
+	if err = e.process.Start(e.ShutdownTimeout); err != nil {
 		// if there was only one argument, and it contained spaces, warn the user
 		// that they may have configured it wrong.
 		if len(e.Command) == 1 && strings.Contains(e.Command[0], " ") {
@@ -175,9 +176,9 @@ func (e *Execd) Init() error {
 func init() {
 	inputs.Add("execd", func() telegraf.Input {
 		return &Execd{
-			Signal:       "none",
-			RestartDelay: config.Duration(10 * time.Second),
-			Timeout:      0,
+			Signal:          "none",
+			RestartDelay:    config.Duration(10 * time.Second),
+			ShutdownTimeout: 5,
 		}
 	})
 }

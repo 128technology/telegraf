@@ -21,8 +21,8 @@ const sampleConfig = `
   ## Delay before the process is restarted after an unexpected termination
   restart_delay = "10s"
 
-  ## Timeout 
-  timeout = 0
+  ## Timeout in seconds given to process when gracefully shutting down 
+  shutdown_timeout = 5
 
   ## Data format to export.
   ## Each data format has its own unique set of configuration options, read
@@ -32,10 +32,10 @@ const sampleConfig = `
 `
 
 type Execd struct {
-	Command      []string        `toml:"command"`
-	RestartDelay config.Duration `toml:"restart_delay"`
-	Timeout      time.Duration   `toml:"timeout"`
-	Log          telegraf.Logger
+	Command         []string        `toml:"command"`
+	RestartDelay    config.Duration `toml:"restart_delay"`
+	ShutdownTimeout time.Duration   `toml:"shutdown_timeout"`
+	Log             telegraf.Logger
 
 	process    *process.Process
 	serializer serializers.Serializer
@@ -68,12 +68,13 @@ func (e *Execd) Init() error {
 	e.process.RestartDelay = time.Duration(e.RestartDelay)
 	e.process.ReadStdoutFn = e.cmdReadOut
 	e.process.ReadStderrFn = e.cmdReadErr
+	e.process.shutdownTimeout = e.ShutdownTimeout
 
 	return nil
 }
 
 func (e *Execd) Connect() error {
-	if err := e.process.Start(e.Timeout); err != nil {
+	if err := e.process.Start(e.ShutdownTimeout); err != nil {
 		// if there was only one argument, and it contained spaces, warn the user
 		// that they may have configured it wrong.
 		if len(e.Command) == 1 && strings.Contains(e.Command[0], " ") {
@@ -128,6 +129,8 @@ func (e *Execd) cmdReadOut(out io.Reader) {
 
 func init() {
 	outputs.Add("execd", func() telegraf.Output {
-		return &Execd{}
+		return &Execd{
+			ShutdownTimeout: 5,
+		}
 	})
 }

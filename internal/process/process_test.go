@@ -30,6 +30,7 @@ func TestRestartingRebindsPipes(t *testing.T) {
 	p, err := New([]string{exe, "-external"})
 	p.RestartDelay = 100 * time.Nanosecond
 	p.Log = testutil.Logger{}
+	p.shutdownTimeout = 5
 	require.NoError(t, err)
 
 	linesRead := int64(0)
@@ -41,7 +42,7 @@ func TestRestartingRebindsPipes(t *testing.T) {
 		}
 	}
 
-	require.NoError(t, p.Start())
+	require.NoError(t, p.Start(p.shutdownTimeout))
 
 	for atomic.LoadInt64(&linesRead) < 1 {
 		time.Sleep(1 * time.Millisecond)

@@ -31,10 +31,11 @@ func TestExternalOutputWorks(t *testing.T) {
 	require.NoError(t, err)
 
 	e := &Execd{
-		Command:      []string{exe, "-testoutput"},
-		RestartDelay: config.Duration(5 * time.Second),
-		serializer:   influxSerializer,
-		Log:          testutil.Logger{},
+		Command:         []string{exe, "-testoutput"},
+		RestartDelay:    config.Duration(5 * time.Second),
+		serializer:      influxSerializer,
+		Log:             testutil.Logger{},
+		ShutdownTimeout: 5,
 	}
 
 	require.NoError(t, e.Init())
