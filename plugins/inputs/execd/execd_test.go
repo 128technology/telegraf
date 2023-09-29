@@ -26,7 +26,7 @@ func TestSettingConfigWorks(t *testing.T) {
 	[[inputs.execd]]
 		command = ["a", "b", "c"]
 		restart_delay = "1m"
-		shutdown_timeout = 5
+		shutdown_timeout = "5s"
 		signal = "SIGHUP"
 	`
 	conf := config.NewConfig()
@@ -38,7 +38,7 @@ func TestSettingConfigWorks(t *testing.T) {
 	require.EqualValues(t, []string{"a", "b", "c"}, inp.Command)
 	require.EqualValues(t, 1*time.Minute, inp.RestartDelay)
 	require.EqualValues(t, "SIGHUP", inp.Signal)
-	require.EqualValues(t, 5, inp.ShutdownTimeout)
+	require.EqualValues(t, 5*time.Second, inp.ShutdownTimeout)
 }
 
 func TestExternalInputWorks(t *testing.T) {
@@ -49,11 +49,12 @@ func TestExternalInputWorks(t *testing.T) {
 	require.NoError(t, err)
 
 	e := &Execd{
-		Command:      []string{exe, "-counter"},
-		RestartDelay: config.Duration(5 * time.Second),
-		parser:       influxParser,
-		Signal:       "STDIN",
-		Log:          testutil.Logger{},
+		Command:         []string{exe, "-counter"},
+		RestartDelay:    config.Duration(5 * time.Second),
+		parser:          influxParser,
+		Signal:          "STDIN",
+		Log:             testutil.Logger{},
+		ShutdownTimeout: config.Duration(5 * time.Second),
 	}
 
 	metrics := make(chan telegraf.Metric, 10)
@@ -83,11 +84,12 @@ func TestParsesLinesContainingNewline(t *testing.T) {
 	acc := agent.NewAccumulator(&TestMetricMaker{}, metrics)
 
 	e := &Execd{
-		RestartDelay: config.Duration(5 * time.Second),
-		parser:       parser,
-		Signal:       "STDIN",
-		acc:          acc,
-		Log:          testutil.Logger{},
+		RestartDelay:    config.Duration(5 * time.Second),
+		parser:          parser,
+		Signal:          "STDIN",
+		acc:             acc,
+		Log:             testutil.Logger{},
+		ShutdownTimeout: config.Duration(5 * time.Second),
 	}
 
 	cases := []struct {

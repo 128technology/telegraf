@@ -35,7 +35,7 @@ const sampleConfig = `
   restart_delay = "10s"
 
   ## Timeout in seconds given to process when gracefully shutting down 
-  shutdown_timeout = 5
+  shutdown_timeout = "5s"
 
   ## Data format to consume.
   ## Each data format has its own unique set of configuration options, read
@@ -49,7 +49,7 @@ type Execd struct {
 	Signal          string          `toml:"signal"`
 	RestartDelay    config.Duration `toml:"restart_delay"`
 	Log             telegraf.Logger `toml:"-"`
-	ShutdownTimeout time.Duration   `toml:"shutdown_timeout"`
+	ShutdownTimeout config.Duration `toml:"shutdown_timeout"`
 
 	process *process.Process
 	acc     telegraf.Accumulator
@@ -79,9 +79,9 @@ func (e *Execd) Start(acc telegraf.Accumulator) error {
 	e.process.RestartDelay = time.Duration(e.RestartDelay)
 	e.process.ReadStdoutFn = e.cmdReadOut
 	e.process.ReadStderrFn = e.cmdReadErr
-	e.process.ShutdownTimeout = e.ShutdownTimeout
+	e.process.ShutdownTimeout = time.Duration(e.ShutdownTimeout)
 
-	if err = e.process.Start(e.ShutdownTimeout); err != nil {
+	if err = e.process.Start(time.Duration(e.ShutdownTimeout)); err != nil {
 		// if there was only one argument, and it contained spaces, warn the user
 		// that they may have configured it wrong.
 		if len(e.Command) == 1 && strings.Contains(e.Command[0], " ") {
@@ -178,7 +178,7 @@ func init() {
 		return &Execd{
 			Signal:          "none",
 			RestartDelay:    config.Duration(10 * time.Second),
-			ShutdownTimeout: 5,
+			ShutdownTimeout: config.Duration(5 * time.Second),
 		}
 	})
 }

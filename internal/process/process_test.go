@@ -30,7 +30,7 @@ func TestRestartingRebindsPipes(t *testing.T) {
 	p, err := New([]string{exe, "-external"})
 	p.RestartDelay = 100 * time.Nanosecond
 	p.Log = testutil.Logger{}
-	p.ShutdownTimeout = 5
+	p.ShutdownTimeout = 5 * time.Second
 	require.NoError(t, err)
 
 	linesRead := int64(0)

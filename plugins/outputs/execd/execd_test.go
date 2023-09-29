@@ -35,7 +35,7 @@ func TestExternalOutputWorks(t *testing.T) {
 		RestartDelay:    config.Duration(5 * time.Second),
 		serializer:      influxSerializer,
 		Log:             testutil.Logger{},
-		ShutdownTimeout: 5,
+		ShutdownTimeout: config.Duration(5 * time.Second),
 	}
 
 	require.NoError(t, e.Init())

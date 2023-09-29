@@ -170,7 +170,7 @@ func (p *Process) cmdWait(ctx context.Context, shutdownTimeout time.Duration) er
 	go func() {
 		select {
 		case <-ctx.Done():
-			gracefulStop(processCtx, p.Cmd, shutdownTimeout*time.Second)
+			gracefulStop(processCtx, p.Cmd, shutdownTimeout)
 		case <-processCtx.Done():
 		}
 		wg.Done()
