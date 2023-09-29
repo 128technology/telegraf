@@ -68,7 +68,7 @@ func (e *Execd) Init() error {
 	e.process.RestartDelay = time.Duration(e.RestartDelay)
 	e.process.ReadStdoutFn = e.cmdReadOut
 	e.process.ReadStderrFn = e.cmdReadErr
-	e.process.shutdownTimeout = e.ShutdownTimeout
+	e.process.ShutdownTimeout = e.ShutdownTimeout
 
 	return nil
 }

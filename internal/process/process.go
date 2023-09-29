@@ -23,7 +23,7 @@ type Process struct {
 	ReadStderrFn    func(io.Reader)
 	RestartDelay    time.Duration
 	Log             telegraf.Logger
-	shutdownTimeout time.Duration
+	ShutdownTimeout time.Duration
 
 	name       string
 	args       []string

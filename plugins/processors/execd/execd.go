@@ -83,7 +83,7 @@ func (e *Execd) Start(acc telegraf.Accumulator) error {
 	e.process.RestartDelay = time.Duration(e.RestartDelay)
 	e.process.ReadStdoutFn = e.cmdReadOut
 	e.process.ReadStderrFn = e.cmdReadErr
-	e.process.shutdownTimeout = e.ShutdownTimeout
+	e.process.ShutdownTimeout = e.ShutdownTimeout
 
 	if err = e.process.Start(e.ShutdownTimeout); err != nil {
 		// if there was only one argument, and it contained spaces, warn the user
