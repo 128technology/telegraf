@@ -212,7 +212,7 @@ func (plugin *T128Lte) getLteInterfaces() []lteDeviceInterface {
 		fmt.Errorf("Unable to find node name %s : %w", plugin.nodeName, err)
 		return []lteDeviceInterface{}
 	}
-	deviceInterfaces, err := plugin.getDeviceInterfaces(plugin.nodeName, node)
+	deviceInterfaces, err := plugin.getDeviceInterfaces(node)
 	if err != nil {
 		return []lteDeviceInterface{}
 	}
@@ -243,7 +243,7 @@ func matchNode(nodeName string, content []byte) (nodeConfig, error) {
 	return nodeConfig{}, fmt.Errorf("No matching node names are available in the config %s", content)
 }
 
-func (plugin *T128Lte) getDeviceInterfaces(name string, nodeData nodeConfig) ([]lteDeviceInterface, error) {
+func (plugin *T128Lte) getDeviceInterfaces(nodeData nodeConfig) ([]lteDeviceInterface, error) {
 	var deviceInterfaces []lteDeviceInterface
 
 	for _, deviceType := range nodeData.DeviceInterface {
