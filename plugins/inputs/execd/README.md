@@ -34,6 +34,9 @@ STDERR from the process will be relayed to Telegraf as errors in the logs.
   ## Delay before the process is restarted after an unexpected termination
   restart_delay = "10s"
 
+  ## Timeout in seconds given to process when gracefully shutting down 
+  shutdown_timeout = "5s"
+
   ## Data format to consume.
   ## Each data format has its own unique set of configuration options, read
   ## more about them here:
