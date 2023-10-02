@@ -1,0 +1,16 @@
+{
+  "LTE": {
+    "Active 3GPP Profile": {
+      "APN": "broadband"
+    },
+    "Signal Strength": "good",
+    "RSRQ Signal Strength": "-15 dB",
+    "RSSI Signal Strength": "-74 dBm",
+    "Radio Interface": "lte",
+    "RSRP Signal Strength": "-108 dBm",
+    "Registration Status": "registered",
+    "Active Band Class": "eutran-12",
+    "Carrier": "AT&T",
+    "Connection Status": "connected"
+  }
+}

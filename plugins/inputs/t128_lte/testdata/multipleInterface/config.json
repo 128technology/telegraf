@@ -1,0 +1,34 @@
+{
+  "config": {
+    "authority": {
+      "router": [
+        {
+          "name": "Router128",
+          "node": [
+            {
+              "enabled": true,
+              "deviceInterface": [
+                {
+                  "name": "LTE",
+                  "targetInterface": "wwp0s21u1i8",
+                  "type": "lte"
+                },
+                {
+                  "name": "lte-int-2",
+                  "targetInterface": "wwp0s21u4i10",
+                  "type": "lte"
+                },
+                {
+                  "type": "host",
+                  "name": "host",
+                  "mode": "host"
+                }
+              ],
+              "name": "test1"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
