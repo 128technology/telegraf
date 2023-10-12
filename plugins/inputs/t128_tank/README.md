@@ -6,18 +6,16 @@ The tank input plugin collects data from a 128T.
 
 ```toml
 [[inputs.t128_tank]]
-## A name for the collector which will be used as the measurement name of the produced data.
-# collector_name = "event_collector"
-
-## Required. A path for index file.
+## A (unique) file to use for index tracking. 
+## This tracking allows each event to be produced once.
 # index_file = ""
 
-## Required. Type of topic.
+## Required. The TANK topic to consume.
 # topic = "events"
 
-## Required. Port Number to get tank data from.
+## Port Number to get tank data from.
 # port_number = 11011
 
-## Required. Port Address to get tank data from.
-# port_address = "127.0.0.1"
+## Server Address to get tank data from.
+# server_address = "127.0.0.1"
 ```
