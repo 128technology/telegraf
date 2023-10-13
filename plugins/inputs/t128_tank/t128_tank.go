@@ -89,8 +89,8 @@ func (plugin *T128Tank) Start(acc telegraf.Accumulator) error {
 
 	plugin.mainWG.Add(1)
 	go func() {
-		reader.Run(plugin.ctx)
 		defer plugin.mainWG.Done()
+		reader.Run(plugin.ctx)
 	}()
 
 	return nil

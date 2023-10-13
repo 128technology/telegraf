@@ -43,9 +43,8 @@ func (bf *boundaryFault) Error() string {
 }
 
 type IndexedMessage struct {
-	Message   []byte
-	Index     index
-	Timestamp int
+	Message []byte
+	Index   index
 }
 
 type index struct {
@@ -53,6 +52,7 @@ type index struct {
 }
 
 func newIndex(data string) (index, error) {
+	data = strings.TrimSpace(data)
 	if string(data) == endIndexStr {
 		return EndIndex, nil
 	}
@@ -130,7 +130,7 @@ func (r *Reader) Run(mainCtx context.Context) {
 	lastIndex, err := r.getIndex(r.indexPath, r.defaultIndex)
 	r.lastSavedIndex = lastIndex.value
 	if err != nil {
-		r.log.Errorf("Error in get index")
+		r.log.Errorf("Error in get index %v", err)
 		readCtxCancel()
 		return
 	}
@@ -154,7 +154,59 @@ func (r *Reader) Run(mainCtx context.Context) {
 				r.lastSavedIndex = lastIndex.value
 			}
 			nextSaveCheck = time.After(2 * time.Second)
+		case err := <-r.readDone:
+			var errBoundaryFault *boundaryFault
+			if err != nil && errors.As(err, &errBoundaryFault) {
+				r.log.Debugf("detected boundary fault, restarting %s tank read from index %d", r.topic, errBoundaryFault.nextAvailableIndex.value)
+				go r.read(mainCtx, readCtx, errBoundaryFault.nextAvailableIndex)
+			} else {
+				go r.read(mainCtx, readCtx, lastIndex.next())
+			}
 		}
+	}
+}
+
+func (r *Reader) getIndex(indexPath string, defaultIndex index) (index, error) {
+	if indexPath == "" {
+		r.log.Debugf("index file path not provided, starting with default index %s", defaultIndex.string())
+		return defaultIndex, nil
+	}
+	content, err := os.ReadFile(indexPath)
+	if errors.Is(err, os.ErrNotExist) {
+		r.log.Debugf("index file %s does not exist, starting with default index %s", indexPath, defaultIndex.string())
+		return defaultIndex, nil
+
+	} else if err != nil {
+		return defaultIndex, fmt.Errorf("encountered error reading index file, starting with default index %s: %s", defaultIndex.string(), err)
+	}
+
+	r.log.Debugf("found '%s' in index file", content)
+
+	index, err := newIndex(string(content))
+	if err != nil {
+		return defaultIndex, fmt.Errorf("encountered error while parsing index file content, starting with default index %s: %s", defaultIndex.string(), err)
+	}
+
+	return index, nil
+}
+
+func (r *Reader) setIndex(indexPath string, index index) {
+	if indexPath == "" {
+		r.log.Debugf("index file path not provided, starting with index %d", index.value)
+		return
+	}
+	_, err := os.Stat(path.Dir(indexPath))
+	if errors.Is(err, os.ErrNotExist) {
+		err := os.MkdirAll(path.Dir(indexPath), os.ModePerm)
+		if err != nil {
+			r.log.Debugf("unable to create index file parent directory: %s", err)
+			return
+		}
+	}
+
+	err = os.WriteFile(indexPath, []byte(index.string()), 0644)
+	if err != nil {
+		r.log.Debugf("unable to update index to %d: %s", index, err)
 	}
 }
 
@@ -172,10 +224,58 @@ func (r *Reader) read(mainCtx context.Context, readCtx context.Context, starting
 	r.readDone <- err
 }
 
-func (i *IndexedMessage) WithTimestamp(timestamp int) []byte {
-	parts := strings.Fields(string(i.Message))
-	parts[len(parts)-1] = strconv.Itoa(timestamp)
-	return []byte(strings.Join(parts, " "))
+func (r *Reader) readFromTank(readCtx context.Context, startingIndex index) (err error) {
+	cmdArgs := []string{
+		"/opt/128technology/bin/tank-cli",
+		"-b",
+		fmt.Sprintf("%s:%d", r.tankAddress, r.tankPort),
+		"-t",
+		r.topic,
+		"consume",
+		"-F",
+		"seqnum,content",
+		startingIndex.string(),
+	}
+
+	cmd := r.tankReadCmdCtx(readCtx, cmdArgs[0], cmdArgs[1:]...)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("unable to pipe %s tank output: %s", r.topic, err)
+	}
+
+	tankReader := bufio.NewReader(stdout)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("unable to start %s tank stream: %w", r.topic, err)
+	}
+
+	var parseErr error
+	var messages []*IndexedMessage
+
+	for {
+		select {
+		case <-readCtx.Done():
+			r.log.Errorf("%s read routine done", r.topic)
+			return nil
+		default:
+		}
+
+		messages, parseErr = parseLines(tankReader, r.topic)
+		if parseErr != nil {
+			r.log.Errorf("encountered error while parsing lines in %s output, will not attempt to parse more lines: %v", r.topic, parseErr)
+			return parseErr
+		}
+		var collectedMessages []IndexedMessage
+		for _, message := range messages {
+			if message.IsValid() {
+				collectedMessages = append(collectedMessages, *message)
+			}
+		}
+		select {
+		case <-readCtx.Done():
+			return nil
+		case r.sendChan <- collectedMessages:
+		}
+	}
 }
 
 func (i *IndexedMessage) IsValid() bool {
@@ -259,102 +359,4 @@ func isBoundaryFault(line string) (bool, index) {
 	}
 
 	return true, nextIndex
-}
-
-func (r *Reader) readFromTank(readCtx context.Context, startingIndex index) (err error) {
-	cmdArgs := []string{
-		"/opt/128technology/bin/tank-cli",
-		"-b",
-		fmt.Sprintf("%s:%d", r.tankAddress, r.tankPort),
-		"-t",
-		r.topic,
-		"consume",
-		"-F",
-		"seqnum,content",
-		startingIndex.string(),
-	}
-
-	cmd := r.tankReadCmdCtx(readCtx, cmdArgs[0], cmdArgs[1:]...)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return fmt.Errorf("unable to pipe %s tank output: %s", r.topic, err)
-	}
-
-	tankReader := bufio.NewReader(stdout)
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("unable to start %s tank stream: %w", r.topic, err)
-	}
-
-	var parseErr error
-	var messages []*IndexedMessage
-
-	for {
-		select {
-		case <-readCtx.Done():
-			r.log.Errorf("%s read routine done", r.topic)
-			return nil
-		default:
-		}
-
-		messages, parseErr = parseLines(tankReader, r.topic)
-		if parseErr != nil {
-			r.log.Errorf("encountered error while parsing lines in %s output, will not attempt to parse more lines: %v", r.topic, parseErr)
-			return parseErr
-		}
-		var collectedMessages []IndexedMessage
-		for _, message := range messages {
-			if message.IsValid() {
-				collectedMessages = append(collectedMessages, *message)
-			}
-		}
-		select {
-		case <-readCtx.Done():
-			return nil
-		case r.sendChan <- collectedMessages:
-		}
-	}
-}
-
-func (r *Reader) getIndex(indexPath string, defaultIndex index) (index, error) {
-	if indexPath == "" {
-		r.log.Debugf("index file path not provided, starting with default index %s", defaultIndex.string())
-		return defaultIndex, nil
-	}
-	content, err := os.ReadFile(indexPath)
-	if errors.Is(err, os.ErrNotExist) {
-		r.log.Debugf("index file %s does not exist, starting with default index %s", indexPath, defaultIndex.string())
-		return defaultIndex, nil
-
-	} else if err != nil {
-		return defaultIndex, fmt.Errorf("encountered error reading index file, starting with default index %s: %s", defaultIndex.string(), err)
-	}
-
-	r.log.Debugf("found '%s' in index file", content)
-
-	index, err := newIndex(string(content))
-	if err != nil {
-		return defaultIndex, fmt.Errorf("encountered error while parsing index file content, starting with default index %s: %s", defaultIndex.string(), err)
-	}
-
-	return index, nil
-}
-
-func (r *Reader) setIndex(indexPath string, index index) {
-	if indexPath == "" {
-		r.log.Debugf("index file path not provided, starting with index %d", index.value)
-		return
-	}
-	_, err := os.Stat(path.Dir(indexPath))
-	if errors.Is(err, os.ErrNotExist) {
-		err := os.MkdirAll(path.Dir(indexPath), os.ModePerm)
-		if err != nil {
-			r.log.Debugf("unable to create index file parent directory: %s", err)
-			return
-		}
-	}
-
-	err = os.WriteFile(indexPath, []byte(index.string()), 0644)
-	if err != nil {
-		r.log.Debugf("unable to update index to %d: %s", index, err)
-	}
 }
