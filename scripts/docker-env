@@ -30,11 +30,16 @@ def build(args):
         "rpm_version": f"{args.version}-{args.release}",
     }
 
+    build_commands = ["make", "x86_64.rpm"]
+
+    if args.clean:
+        build_commands.insert(1, "clean")
+
     try:
         subprocess.run(
             build_docker_command(
                 args.docker_file,
-                ["make", "clean", "x86_64.rpm"],
+                build_commands,
                 interactive=False,
                 env=env,
             ),
@@ -129,6 +134,12 @@ def parse_args():
     build_parser.add_argument(
         "--no-fetch",
         help="Whether to fetch dependencies before building. If not, you should have run `make deps` in your source directory.",
+        action="store_true",
+    )
+
+    build_parser.add_argument(
+        "--clean", 
+        help="Whether to clean up and build everything from scratch", 
         action="store_true",
     )
 

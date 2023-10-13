@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"math"
 	"os"
 	"os/exec"
@@ -101,13 +100,11 @@ type Reader struct {
 	defaultIndex index
 	// telegraf Logger
 	log telegraf.Logger
-	// context in which go routine is executing
-	ctx context.Context
 	// telegraf accumulator
 	acc telegraf.Accumulator
 }
 
-func NewReader(tankAddress string, tankPort int, topic string, indexPath string, defaultIndex index, log telegraf.Logger, ctx context.Context, acc telegraf.Accumulator) *Reader {
+func NewReader(tankAddress string, tankPort int, topic string, indexPath string, defaultIndex index, log telegraf.Logger, acc telegraf.Accumulator) *Reader {
 	return &Reader{
 		topic:          topic,
 		tankReadCmdCtx: exec.CommandContext,
@@ -119,7 +116,6 @@ func NewReader(tankAddress string, tankPort int, topic string, indexPath string,
 		indexPath:      indexPath,
 		defaultIndex:   defaultIndex,
 		log:            log,
-		ctx:            ctx,
 		acc:            acc,
 	}
 }
@@ -129,9 +125,9 @@ func (r *Reader) withTankReadCommandContext(tankReadCmdCtx CommandContext) *Read
 	return r
 }
 
-func (r *Reader) Run() {
-	readCtx, readCtxCancel := context.WithCancel(r.ctx)
-	lastIndex, err := getIndex(r.indexPath, r.defaultIndex)
+func (r *Reader) Run(mainCtx context.Context) {
+	readCtx, readCtxCancel := context.WithCancel(mainCtx)
+	lastIndex, err := r.getIndex(r.indexPath, r.defaultIndex)
 	r.lastSavedIndex = lastIndex.value
 	if err != nil {
 		r.log.Errorf("Error in get index")
@@ -142,19 +138,19 @@ func (r *Reader) Run() {
 	nextSaveCheck := time.After(2 * time.Second)
 	defer func() {
 		readCtxCancel()
-		setIndex(r.indexPath, index{value: r.lastSavedIndex})
+		r.setIndex(r.indexPath, index{value: r.lastSavedIndex})
 	}()
 
-	go r.read(r.ctx, readCtx, lastIndex.next())
+	go r.read(mainCtx, readCtx, lastIndex.next())
 
 	for {
 		select {
-		case <-r.ctx.Done():
+		case <-mainCtx.Done():
 			r.log.Errorf("%s reader done", r.topic)
 			return
 		case <-nextSaveCheck:
 			if lastIndex.value > r.lastSavedIndex {
-				setIndex(r.indexPath, lastIndex)
+				r.setIndex(r.indexPath, lastIndex)
 				r.lastSavedIndex = lastIndex.value
 			}
 			nextSaveCheck = time.After(2 * time.Second)
@@ -319,21 +315,21 @@ func (r *Reader) readFromTank(readCtx context.Context, startingIndex index) (err
 	}
 }
 
-func getIndex(indexPath string, defaultIndex index) (index, error) {
+func (r *Reader) getIndex(indexPath string, defaultIndex index) (index, error) {
 	if indexPath == "" {
-		log.Printf("index file path not provided, starting with default index %s", defaultIndex.string())
+		r.log.Debugf("index file path not provided, starting with default index %s", defaultIndex.string())
 		return defaultIndex, nil
 	}
 	content, err := os.ReadFile(indexPath)
 	if errors.Is(err, os.ErrNotExist) {
-		log.Printf("index file %s does not exist, starting with default index %s", indexPath, defaultIndex.string())
+		r.log.Debugf("index file %s does not exist, starting with default index %s", indexPath, defaultIndex.string())
 		return defaultIndex, nil
 
 	} else if err != nil {
 		return defaultIndex, fmt.Errorf("encountered error reading index file, starting with default index %s: %s", defaultIndex.string(), err)
 	}
 
-	log.Printf("found '%s' in index file", content)
+	r.log.Debugf("found '%s' in index file", content)
 
 	index, err := newIndex(string(content))
 	if err != nil {
@@ -343,22 +339,22 @@ func getIndex(indexPath string, defaultIndex index) (index, error) {
 	return index, nil
 }
 
-func setIndex(indexPath string, index index) {
+func (r *Reader) setIndex(indexPath string, index index) {
 	if indexPath == "" {
-		log.Printf("index file path not provided, starting with index %d", index.value)
+		r.log.Debugf("index file path not provided, starting with index %d", index.value)
 		return
 	}
 	_, err := os.Stat(path.Dir(indexPath))
 	if errors.Is(err, os.ErrNotExist) {
 		err := os.MkdirAll(path.Dir(indexPath), os.ModePerm)
 		if err != nil {
-			log.Printf("unable to create index file parent directory: %s", err)
+			r.log.Debugf("unable to create index file parent directory: %s", err)
 			return
 		}
 	}
 
 	err = os.WriteFile(indexPath, []byte(index.string()), 0644)
 	if err != nil {
-		log.Printf("unable to update index to %d: %s", index, err)
+		r.log.Debugf("unable to update index to %d: %s", index, err)
 	}
 }

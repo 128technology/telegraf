@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -38,6 +39,7 @@ type T128Tank struct {
 	ServerAddress string `toml:"server_address"`
 	Log           telegraf.Logger
 	ctx           context.Context
+	mainWG        sync.WaitGroup
 	cancel        context.CancelFunc
 }
 
@@ -65,8 +67,10 @@ func (plugin *T128Tank) Gather(_ telegraf.Accumulator) error {
 func (plugin *T128Tank) Start(acc telegraf.Accumulator) error {
 	plugin.ctx, plugin.cancel = context.WithCancel(context.Background())
 
-	reader := NewReader(plugin.ServerAddress, plugin.PortNumber, plugin.Topic, plugin.IndexFile, StartIndex, plugin.Log, plugin.ctx, acc)
+	reader := NewReader(plugin.ServerAddress, plugin.PortNumber, plugin.Topic, plugin.IndexFile, StartIndex, plugin.Log, acc)
+	plugin.mainWG.Add(1)
 	go func() {
+		defer plugin.mainWG.Done()
 		for {
 			select {
 			case <-plugin.ctx.Done():
@@ -83,8 +87,10 @@ func (plugin *T128Tank) Start(acc telegraf.Accumulator) error {
 		}
 	}()
 
+	plugin.mainWG.Add(1)
 	go func() {
-		reader.Run()
+		reader.Run(plugin.ctx)
+		defer plugin.mainWG.Done()
 	}()
 
 	return nil
@@ -94,6 +100,7 @@ func (plugin *T128Tank) Stop() {
 	if plugin.cancel != nil {
 		plugin.cancel()
 	}
+	plugin.mainWG.Wait()
 }
 
 func (plugin *T128Tank) checkConfig() error {
