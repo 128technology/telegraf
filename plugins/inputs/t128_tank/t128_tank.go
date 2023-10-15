@@ -66,7 +66,6 @@ func (plugin *T128Tank) Gather(_ telegraf.Accumulator) error {
 
 func (plugin *T128Tank) Start(acc telegraf.Accumulator) error {
 	plugin.ctx, plugin.cancel = context.WithCancel(context.Background())
-
 	reader := NewReader(plugin.ServerAddress, plugin.PortNumber, plugin.Topic, plugin.IndexFile, StartIndex, plugin.Log, acc)
 	plugin.mainWG.Add(1)
 	go func() {

@@ -141,7 +141,7 @@ func (r *Reader) Run(mainCtx context.Context) {
 		r.setIndex(r.indexPath, index{value: r.lastSavedIndex})
 	}()
 
-	go r.read(mainCtx, readCtx, lastIndex.next())
+	go r.read(readCtx, lastIndex.next())
 
 	for {
 		select {
@@ -158,9 +158,9 @@ func (r *Reader) Run(mainCtx context.Context) {
 			var errBoundaryFault *boundaryFault
 			if err != nil && errors.As(err, &errBoundaryFault) {
 				r.log.Debugf("detected boundary fault, restarting %s tank read from index %d", r.topic, errBoundaryFault.nextAvailableIndex.value)
-				go r.read(mainCtx, readCtx, errBoundaryFault.nextAvailableIndex)
+				go r.read(readCtx, errBoundaryFault.nextAvailableIndex)
 			} else {
-				go r.read(mainCtx, readCtx, lastIndex.next())
+				go r.read(readCtx, lastIndex.next())
 			}
 		}
 	}
@@ -204,20 +204,20 @@ func (r *Reader) setIndex(indexPath string, index index) {
 		}
 	}
 
-	err = os.WriteFile(indexPath, []byte(index.string()), 0644)
+	err = os.WriteFile(indexPath, []byte(index.string()), 0600)
 	if err != nil {
 		r.log.Debugf("unable to update index to %d: %s", index, err)
 	}
 }
 
-func (r *Reader) read(mainCtx context.Context, readCtx context.Context, startingIndex index) {
+func (r *Reader) read(readCtx context.Context, startingIndex index) {
 	r.log.Errorf("starting %s tank read from index %d", r.topic, startingIndex.value)
 	err := r.readFromTank(readCtx, startingIndex)
 	if err != nil {
 		r.log.Errorf("%s read routine exited with error: %v", r.topic, err)
 	}
 
-	if mainCtx.Err() == nil {
+	if readCtx.Err() == nil {
 		time.Sleep(r.restartDelay)
 	}
 
@@ -245,8 +245,11 @@ func (r *Reader) readFromTank(readCtx context.Context, startingIndex index) (err
 
 	tankReader := bufio.NewReader(stdout)
 	if err := cmd.Start(); err != nil {
+		r.log.Errorf("Error starting command: %s", err.Error())
 		return fmt.Errorf("unable to start %s tank stream: %w", r.topic, err)
 	}
+
+	r.log.Infof("Command started successfully")
 
 	var parseErr error
 	var messages []*IndexedMessage
@@ -266,9 +269,7 @@ func (r *Reader) readFromTank(readCtx context.Context, startingIndex index) (err
 		}
 		var collectedMessages []IndexedMessage
 		for _, message := range messages {
-			if message.IsValid() {
-				collectedMessages = append(collectedMessages, *message)
-			}
+			collectedMessages = append(collectedMessages, *message)
 		}
 		select {
 		case <-readCtx.Done():
@@ -299,25 +300,30 @@ func parseLines(tankReader *bufio.Reader, topic string) (messages []*IndexedMess
 			continue
 		}
 		message, err := ParseTankLine(rawLine)
+
 		if err != nil {
 			fmt.Errorf("parse failure for topic %s: %v", topic, err)
 			continue
 		}
 
 		if message == nil {
-			if isBoundaryFault, nextAvailabelIndex := isBoundaryFault(line); isBoundaryFault {
+			if isBoundaryFault, nextAvailableIndex := isBoundaryFault(line); isBoundaryFault {
 				return messages, fmt.Errorf(
 					"parsed boundary fault: %w",
-					&boundaryFault{nextAvailableIndex: nextAvailabelIndex},
+					&boundaryFault{nextAvailableIndex: nextAvailableIndex},
 				)
 			}
 
 			fmt.Errorf("skipping %s line because regex matching failed: %s", topic, line)
 			continue
 		}
+		if message != nil && message.IsValid() {
+			message.Message = bytes.TrimRight(message.Message, "\n")
+			messages = append(messages, message)
+		} else {
+			return nil, fmt.Errorf("invalid message received : %s", line)
+		}
 
-		message.Message = bytes.TrimRight(message.Message, "\n")
-		messages = append(messages, message)
 	}
 
 	return messages, err
