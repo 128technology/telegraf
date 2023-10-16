@@ -88,7 +88,15 @@ func TestT128TankReader(t *testing.T) {
 				err := os.WriteFile(plugin.IndexFile, []byte(testcase.IndexFileContent), 0755)
 				assert.NoError(t, err)
 			}
-			reader := NewReader(plugin.ServerAddress, plugin.PortNumber, plugin.Topic, plugin.IndexFile, testcase.DefaultIndex, testutil.Logger{}, &acc).withTankReadCommandContext(testcase.TankReadCommandContext)
+			reader := NewReader(
+				plugin.ServerAddress,
+				plugin.PortNumber,
+				plugin.Topic,
+				plugin.IndexFile,
+				testcase.DefaultIndex,
+				testutil.Logger{},
+				&acc,
+			).withTankReadCommandContext(testcase.TankReadCommandContext)
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
@@ -148,6 +156,7 @@ func TestBoundaryFault(t *testing.T) {
 			}
 
 			var acc testutil.Accumulator
+			var wg sync.WaitGroup
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
@@ -157,16 +166,26 @@ func TestBoundaryFault(t *testing.T) {
 				err := os.WriteFile(plugin.IndexFile, []byte(testcase.IndexFileContent), 0755)
 				assert.NoError(t, err)
 			}
-			reader := NewReader(plugin.ServerAddress, plugin.PortNumber, plugin.Topic, plugin.IndexFile, testcase.DefaultIndex, testutil.Logger{}, &acc).withTankReadCommandContext(testcase.TankReadCommandContext)
+			reader := NewReader(
+				plugin.ServerAddress,
+				plugin.PortNumber,
+				plugin.Topic,
+				plugin.IndexFile,
+				testcase.DefaultIndex,
+				testutil.Logger{},
+				&acc,
+			).withTankReadCommandContext(testcase.TankReadCommandContext)
 			var receivedErrorMessage string
+			wg.Add(1)
 			go func() {
+				defer wg.Done()
 				err := reader.readFromTank(ctx, StartIndex)
 				if err != nil {
 					receivedErrorMessage = err.Error()
 				}
 			}()
 
-			time.Sleep(1 * time.Second)
+			wg.Wait()
 
 			assert.Equal(t, testcase.ExpectedError, receivedErrorMessage)
 		})
@@ -180,11 +199,11 @@ func TestParseTankLine(t *testing.T) {
 		ExpectedMessage *IndexedMessage
 	}{
 		{
-			Name:         "input-message-with-newline",
-			InputMessage: "seq=8:type=LINK_UP, Timestamp=2022-03-25T00:00:00Z,Raw=hello\nworld",
+			Name:         "input-message",
+			InputMessage: "seq=861:events,collector_id=auditd,node=westB,subtype=authentication,type=admin event_detail='node=t137-dut3.openstacklocal type=USER_AUTH msg=audit(1697466322.733:10608): pid=16967 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:authentication grantors=pam_faillock,pam_unix acct=\"centos\" exe=\"/usr/sbin/sshd\" hostname=172.18.15.253 addr=172.18.15.253 terminal=ssh res=success'',permitted=t,user='centos' 1697466322733010608",
 			ExpectedMessage: &IndexedMessage{
-				Message: []byte("type=LINK_UP, Timestamp=2022-03-25T00:00:00Z,Raw=hello\nworld"),
-				Index:   index{value: 8},
+				Message: []byte("events,collector_id=auditd,node=westB,subtype=authentication,type=admin event_detail='node=t137-dut3.openstacklocal type=USER_AUTH msg=audit(1697466322.733:10608): pid=16967 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:authentication grantors=pam_faillock,pam_unix acct=\"centos\" exe=\"/usr/sbin/sshd\" hostname=172.18.15.253 addr=172.18.15.253 terminal=ssh res=success'',permitted=t,user='centos' 1697466322733010608"),
+				Index:   index{value: 861},
 			},
 		},
 		{

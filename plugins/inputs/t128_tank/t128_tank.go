@@ -3,7 +3,9 @@ package t128_tank
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,6 +33,11 @@ var sampleConfig = `
 ## Server Address to get tank data from.
 # server_address = "127.0.0.1"
 `
+
+var (
+	typePattern       = `,type=([^\s]+)`
+	recordTypePattern = `recordType=([^\s]+)`
+)
 
 type T128Tank struct {
 	IndexFile     string `toml:"index_file"`
@@ -76,11 +83,20 @@ func (plugin *T128Tank) Start(acc telegraf.Accumulator) error {
 				return
 			case messages := <-reader.sendChan:
 				for _, message := range messages {
+
+					tags := map[string]string{
+						"index": strconv.FormatUint(message.Index.value, 10),
+					}
+					if strings.ToLower(plugin.Topic) == "events" {
+						messageType := extractMessageType(string(message.Message), typePattern)
+						tags["type"] = messageType
+					} else if strings.ToLower(plugin.Topic) == "session_records" {
+						messageType := extractMessageType(string(message.Message), recordTypePattern)
+						tags["recordType"] = messageType
+					}
 					acc.AddFields("t128_tank", map[string]interface{}{
 						"message": string(message.Message),
-					}, map[string]string{
-						"index": strconv.FormatUint(message.Index.value, 10),
-					}, time.Now())
+					}, tags, time.Now())
 				}
 			}
 		}
@@ -100,6 +116,16 @@ func (plugin *T128Tank) Stop() {
 		plugin.cancel()
 	}
 	plugin.mainWG.Wait()
+}
+
+func extractMessageType(message string, pattern string) string {
+
+	regex := regexp.MustCompile(pattern)
+	match := regex.FindStringSubmatch(message)
+	if len(match) > 1 {
+		return match[1]
+	}
+	return ""
 }
 
 func (plugin *T128Tank) checkConfig() error {

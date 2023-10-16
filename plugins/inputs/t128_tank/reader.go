@@ -211,7 +211,7 @@ func (r *Reader) setIndex(indexPath string, index index) {
 }
 
 func (r *Reader) read(readCtx context.Context, startingIndex index) {
-	r.log.Errorf("starting %s tank read from index %d", r.topic, startingIndex.value)
+	r.log.Infof("starting %s tank read from index %d", r.topic, startingIndex.value)
 	err := r.readFromTank(readCtx, startingIndex)
 	if err != nil {
 		r.log.Errorf("%s read routine exited with error: %v", r.topic, err)
