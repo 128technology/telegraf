@@ -88,10 +88,10 @@ func (plugin *T128Tank) Start(acc telegraf.Accumulator) error {
 						"index": strconv.FormatUint(message.Index.value, 10),
 					}
 					if strings.ToLower(plugin.Topic) == "events" {
-						messageType := extractMessageType(string(message.Message), typePattern)
+						messageType := extractTopicType(string(message.Message), typePattern)
 						tags["type"] = messageType
 					} else if strings.ToLower(plugin.Topic) == "session_records" {
-						messageType := extractMessageType(string(message.Message), recordTypePattern)
+						messageType := extractTopicType(string(message.Message), recordTypePattern)
 						tags["recordType"] = messageType
 					}
 					acc.AddFields("t128_tank", map[string]interface{}{
@@ -118,8 +118,7 @@ func (plugin *T128Tank) Stop() {
 	plugin.mainWG.Wait()
 }
 
-func extractMessageType(message string, pattern string) string {
-
+func extractTopicType(message string, pattern string) string {
 	regex := regexp.MustCompile(pattern)
 	match := regex.FindStringSubmatch(message)
 	if len(match) > 1 {
