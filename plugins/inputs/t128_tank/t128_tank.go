@@ -3,14 +3,12 @@ package t128_tank
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strconv"
-	"strings"
 	"sync"
-	"time"
 
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/inputs"
+	"github.com/influxdata/telegraf/plugins/parsers"
 )
 
 const (
@@ -30,24 +28,24 @@ var sampleConfig = `
 ## Port Number to get tank data from.
 # port_number = 11011
 
+## A field name to display index number
+# sequence_number_field = ""
+
 ## Server Address to get tank data from.
 # server_address = "127.0.0.1"
 `
 
-var (
-	typePattern       = `,type=([^\s]+)`
-	recordTypePattern = `recordType=([^\s]+)`
-)
-
 type T128Tank struct {
-	IndexFile     string `toml:"index_file"`
-	Topic         string `toml:"topic"`
-	PortNumber    int    `toml:"port_number"`
-	ServerAddress string `toml:"server_address"`
-	Log           telegraf.Logger
-	ctx           context.Context
-	mainWG        sync.WaitGroup
-	cancel        context.CancelFunc
+	IndexFile           string `toml:"index_file"`
+	Topic               string `toml:"topic"`
+	PortNumber          int    `toml:"port_number"`
+	ServerAddress       string `toml:"server_address"`
+	SequenceNumberField string `toml:"sequence_number_field"`
+	Log                 telegraf.Logger
+	ctx                 context.Context
+	mainWG              sync.WaitGroup
+	cancel              context.CancelFunc
+	parser              parsers.Parser
 }
 
 func (*T128Tank) SampleConfig() string {
@@ -56,6 +54,10 @@ func (*T128Tank) SampleConfig() string {
 
 func (*T128Tank) Description() string {
 	return "Run TANK as a long-running input plugin"
+}
+
+func (plugin *T128Tank) SetParser(parser parsers.Parser) {
+	plugin.parser = parser
 }
 
 func (plugin *T128Tank) Init() error {
@@ -83,20 +85,16 @@ func (plugin *T128Tank) Start(acc telegraf.Accumulator) error {
 				return
 			case messages := <-reader.sendChan:
 				for _, message := range messages {
-
-					tags := map[string]string{
-						"index": strconv.FormatUint(message.Index.value, 10),
+					metrics, err := plugin.parser.Parse(message.Message)
+					if err != nil {
+						acc.AddError(err)
 					}
-					if strings.ToLower(plugin.Topic) == "events" {
-						messageType := extractTopicType(string(message.Message), typePattern)
-						tags["type"] = messageType
-					} else if strings.ToLower(plugin.Topic) == "session_records" {
-						messageType := extractTopicType(string(message.Message), recordTypePattern)
-						tags["recordType"] = messageType
+					for _, metric := range metrics {
+						if plugin.SequenceNumberField != "" {
+							metric.AddField(plugin.SequenceNumberField, strconv.FormatUint(message.Index.value, 10))
+						}
+						acc.AddFields(metric.Name(), metric.Fields(), metric.Tags(), metric.Time())
 					}
-					acc.AddFields("t128_tank", map[string]interface{}{
-						"message": string(message.Message),
-					}, tags, time.Now())
 				}
 			}
 		}
@@ -116,15 +114,6 @@ func (plugin *T128Tank) Stop() {
 		plugin.cancel()
 	}
 	plugin.mainWG.Wait()
-}
-
-func extractTopicType(message string, pattern string) string {
-	regex := regexp.MustCompile(pattern)
-	match := regex.FindStringSubmatch(message)
-	if len(match) > 1 {
-		return match[1]
-	}
-	return ""
 }
 
 func (plugin *T128Tank) checkConfig() error {

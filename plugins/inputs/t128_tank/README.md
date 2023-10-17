@@ -6,7 +6,6 @@ The tank input plugin collects data from a 128T.
 
 ```toml
 [[inputs.t128_tank]]
-## A (unique) file to use for index tracking. 
 ## This tracking allows each event to be produced once.
 # index_file = ""
 
@@ -15,6 +14,9 @@ The tank input plugin collects data from a 128T.
 
 ## Port Number to get tank data from.
 # port_number = 11011
+
+## A field name to display index number
+# sequence_number_field = ""
 
 ## Server Address to get tank data from.
 # server_address = "127.0.0.1"
