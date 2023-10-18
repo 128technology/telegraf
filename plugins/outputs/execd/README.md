@@ -15,6 +15,9 @@ Telegraf minimum version: Telegraf 1.15.0
   ## Delay before the process is restarted after an unexpected termination
   restart_delay = "10s"
 
+  ## Timeout in seconds given to process when gracefully shutting down 
+  shutdown_timeout = "5s"
+
   ## Data format to export.
   ## Each data format has its own unique set of configuration options, read
   ## more about them here:
