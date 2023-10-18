@@ -20,4 +20,10 @@ The tank input plugin collects data from a 128T.
 
 ## Server Address to get tank data from.
 # server_address = "127.0.0.1"
+
+## From specifies the first message we are interested in.
+## If from is "beginning" or "start", it will start consuming from the 
+## first available message in the selected topic. If it is "eof" or "end", 
+## it will tail the topic for newly produced messages.
+# from = "end"
 ```

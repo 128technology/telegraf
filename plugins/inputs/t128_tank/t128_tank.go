@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/influxdata/telegraf"
@@ -33,6 +34,12 @@ var sampleConfig = `
 
 ## Server Address to get tank data from.
 # server_address = "127.0.0.1"
+
+## From specifies the first message we are interested in.
+## If from is "beginning" or "start", it will start consuming from the 
+## first available message in the selected topic. If it is "eof" or "end", 
+## it will tail the topic for newly produced messages.
+# from = "end"
 `
 
 type T128Tank struct {
@@ -41,11 +48,14 @@ type T128Tank struct {
 	PortNumber          int    `toml:"port_number"`
 	ServerAddress       string `toml:"server_address"`
 	SequenceNumberField string `toml:"sequence_number_field"`
-	Log                 telegraf.Logger
-	ctx                 context.Context
-	mainWG              sync.WaitGroup
-	cancel              context.CancelFunc
-	parser              parsers.Parser
+	From                string `toml:"from"`
+
+	Log        telegraf.Logger
+	ctx        context.Context
+	mainWG     sync.WaitGroup
+	cancel     context.CancelFunc
+	parser     parsers.Parser
+	indexValue index
 }
 
 func (*T128Tank) SampleConfig() string {
@@ -75,7 +85,7 @@ func (plugin *T128Tank) Gather(_ telegraf.Accumulator) error {
 
 func (plugin *T128Tank) Start(acc telegraf.Accumulator) error {
 	plugin.ctx, plugin.cancel = context.WithCancel(context.Background())
-	reader := NewReader(plugin.ServerAddress, plugin.PortNumber, plugin.Topic, plugin.IndexFile, StartIndex, plugin.Log, acc)
+	reader := NewReader(plugin.ServerAddress, plugin.PortNumber, plugin.Topic, plugin.IndexFile, plugin.indexValue, plugin.Log, acc)
 	plugin.mainWG.Add(1)
 	go func() {
 		defer plugin.mainWG.Done()
@@ -93,7 +103,7 @@ func (plugin *T128Tank) Start(acc telegraf.Accumulator) error {
 						if plugin.SequenceNumberField != "" {
 							metric.AddField(plugin.SequenceNumberField, strconv.FormatUint(message.Index.value, 10))
 						}
-						acc.AddFields(metric.Name(), metric.Fields(), metric.Tags(), metric.Time())
+						acc.AddMetric(metric)
 					}
 				}
 			}
@@ -119,6 +129,24 @@ func (plugin *T128Tank) Stop() {
 func (plugin *T128Tank) checkConfig() error {
 	if plugin.Topic == "" {
 		return fmt.Errorf("topic is a required configuration field")
+	}
+
+	if plugin.IndexFile == "" {
+		if strings.ToLower(plugin.From) == "end" || strings.ToLower(plugin.From) == "eof" {
+			plugin.indexValue = EndIndex
+		} else if strings.ToLower(plugin.From) == "beginning" || strings.ToLower(plugin.From) == "start" {
+			plugin.indexValue = StartIndex
+		} else {
+			plugin.indexValue = EndIndex
+		}
+	} else {
+		if strings.ToLower(plugin.From) == "end" || strings.ToLower(plugin.From) == "eof" {
+			plugin.indexValue = EndIndex
+		} else if strings.ToLower(plugin.From) == "beginning" || strings.ToLower(plugin.From) == "start" {
+			plugin.indexValue = StartIndex
+		} else {
+			plugin.indexValue = StartIndex
+		}
 	}
 
 	return nil
