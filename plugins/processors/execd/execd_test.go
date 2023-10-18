@@ -25,6 +25,7 @@ func TestExternalProcessorWorks(t *testing.T) {
 	t.Log(exe)
 	e.Command = []string{exe, "-countmultiplier"}
 	e.RestartDelay = config.Duration(5 * time.Second)
+	e.ShutdownTimeout = config.Duration(5 * time.Second)
 
 	acc := &testutil.Accumulator{}
 
@@ -85,6 +86,7 @@ func TestParseLinesWithNewLines(t *testing.T) {
 	t.Log(exe)
 	e.Command = []string{exe, "-countmultiplier"}
 	e.RestartDelay = config.Duration(5 * time.Second)
+	e.ShutdownTimeout = config.Duration(5 * time.Second)
 
 	acc := &testutil.Accumulator{}
 
