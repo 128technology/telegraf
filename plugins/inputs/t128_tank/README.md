@@ -6,6 +6,7 @@ The tank input plugin collects data from a 128T.
 
 ```toml
 [[inputs.t128_tank]]
+## A (unique) file to use for index tracking. 
 ## This tracking allows each event to be produced once.
 # index_file = ""
 
@@ -22,8 +23,8 @@ The tank input plugin collects data from a 128T.
 # server_address = "127.0.0.1"
 
 ## From specifies the first message we are interested in.
-## If from is "beginning" or "start", it will start consuming from the 
-## first available message in the selected topic. If it is "eof" or "end", 
-## it will tail the topic for newly produced messages.
+## If from is "start", it will start consuming from the 
+## first available message in the selected topic. 
+## If it is "end", it will tail the topic for newly produced messages.
 # from = "end"
 ```

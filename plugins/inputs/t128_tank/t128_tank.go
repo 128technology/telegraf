@@ -2,6 +2,7 @@ package t128_tank
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -36,26 +37,25 @@ var sampleConfig = `
 # server_address = "127.0.0.1"
 
 ## From specifies the first message we are interested in.
-## If from is "beginning" or "start", it will start consuming from the 
-## first available message in the selected topic. If it is "eof" or "end", 
-## it will tail the topic for newly produced messages.
+## If from is "start", it will start consuming from the 
+## first available message in the selected topic. 
+## If it is "end", it will tail the topic for newly produced messages.
 # from = "end"
 `
 
 type T128Tank struct {
-	IndexFile           string `toml:"index_file"`
-	Topic               string `toml:"topic"`
-	PortNumber          int    `toml:"port_number"`
-	ServerAddress       string `toml:"server_address"`
-	SequenceNumberField string `toml:"sequence_number_field"`
-	From                string `toml:"from"`
-
-	Log        telegraf.Logger
-	ctx        context.Context
-	mainWG     sync.WaitGroup
-	cancel     context.CancelFunc
-	parser     parsers.Parser
-	indexValue index
+	IndexFile            string `toml:"index_file"`
+	Topic                string `toml:"topic"`
+	PortNumber           int    `toml:"port_number"`
+	ServerAddress        string `toml:"server_address"`
+	SequenceNumberField  string `toml:"sequence_number_field"`
+	From                 string `toml:"from"`
+	Log                  telegraf.Logger
+	ctx                  context.Context
+	mainWG               sync.WaitGroup
+	cancel               context.CancelFunc
+	parser               parsers.Parser
+	defaultStartingIndex index
 }
 
 func (*T128Tank) SampleConfig() string {
@@ -85,7 +85,7 @@ func (plugin *T128Tank) Gather(_ telegraf.Accumulator) error {
 
 func (plugin *T128Tank) Start(acc telegraf.Accumulator) error {
 	plugin.ctx, plugin.cancel = context.WithCancel(context.Background())
-	reader := NewReader(plugin.ServerAddress, plugin.PortNumber, plugin.Topic, plugin.IndexFile, plugin.indexValue, plugin.Log, acc)
+	reader := NewReader(plugin.ServerAddress, plugin.PortNumber, plugin.Topic, plugin.IndexFile, plugin.defaultStartingIndex, plugin.Log, acc)
 	plugin.mainWG.Add(1)
 	go func() {
 		defer plugin.mainWG.Done()
@@ -131,24 +131,35 @@ func (plugin *T128Tank) checkConfig() error {
 		return fmt.Errorf("topic is a required configuration field")
 	}
 
-	if plugin.IndexFile == "" {
-		if strings.ToLower(plugin.From) == "end" || strings.ToLower(plugin.From) == "eof" {
-			plugin.indexValue = EndIndex
-		} else if strings.ToLower(plugin.From) == "beginning" || strings.ToLower(plugin.From) == "start" {
-			plugin.indexValue = StartIndex
-		} else {
-			plugin.indexValue = EndIndex
-		}
-	} else {
-		if strings.ToLower(plugin.From) == "end" || strings.ToLower(plugin.From) == "eof" {
-			plugin.indexValue = EndIndex
-		} else if strings.ToLower(plugin.From) == "beginning" || strings.ToLower(plugin.From) == "start" {
-			plugin.indexValue = StartIndex
-		} else {
-			plugin.indexValue = StartIndex
+	if plugin.From != "" {
+		err := validateFrom(plugin.From)
+		if err != nil {
+			return fmt.Errorf("%s", err)
 		}
 	}
 
+	if strings.ToLower(plugin.From) == "end" {
+		plugin.defaultStartingIndex = EndIndex
+	} else if strings.ToLower(plugin.From) == "start" {
+		plugin.defaultStartingIndex = StartIndex
+	} else {
+		if plugin.IndexFile == "" {
+			plugin.defaultStartingIndex = EndIndex
+		} else {
+			plugin.defaultStartingIndex = StartIndex
+		}
+	}
+	return nil
+}
+
+func validateFrom(from string) error {
+	validFromValues := map[string]bool{
+		"start": true,
+		"end":   true,
+	}
+	if _, ok := validFromValues[strings.ToLower(from)]; !ok {
+		return errors.New("Invalid from value. Accepted values are 'start' or 'end'.")
+	}
 	return nil
 }
 
