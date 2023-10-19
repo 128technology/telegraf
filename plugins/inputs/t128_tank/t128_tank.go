@@ -134,7 +134,7 @@ func (plugin *T128Tank) checkConfig() error {
 	if plugin.From != "" {
 		err := validateFrom(plugin.From)
 		if err != nil {
-			return fmt.Errorf("%s", err)
+			return err
 		}
 	}
 
@@ -153,11 +153,8 @@ func (plugin *T128Tank) checkConfig() error {
 }
 
 func validateFrom(from string) error {
-	validFromValues := map[string]bool{
-		"start": true,
-		"end":   true,
-	}
-	if _, ok := validFromValues[strings.ToLower(from)]; !ok {
+	fromLower := strings.ToLower(from)
+	if fromLower != "start" && fromLower != "end" {
 		return errors.New("Invalid from value. Accepted values are 'start' or 'end'.")
 	}
 	return nil

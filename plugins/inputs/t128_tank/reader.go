@@ -171,28 +171,22 @@ func (r *Reader) getIndex(indexPath string, defaultIndex index) (index, error) {
 		r.log.Debugf("index file path not provided, starting with default index %s", defaultIndex.string())
 		return defaultIndex, nil
 	}
-	content, err := os.Open(indexPath)
-	if os.IsNotExist(err) {
+	content, err := os.ReadFile(indexPath)
+	if errors.Is(err, os.ErrNotExist) {
 		r.log.Debugf("index file %s does not exist, starting with default index %s", indexPath, defaultIndex.string())
 		return defaultIndex, nil
 
 	} else if err != nil {
 		return defaultIndex, fmt.Errorf("encountered error reading index file, starting with default index %s: %s", defaultIndex.string(), err)
 	}
-	defer content.Close()
-	scanner := bufio.NewScanner(content)
-	if scanner.Scan() {
-		data := scanner.Text()
-		data = strings.TrimSpace(data)
-		r.log.Debugf("found '%s' in index file", data)
-		index, err := newIndex(data)
-		if err != nil {
-			return defaultIndex, fmt.Errorf("encountered error while parsing index file content, starting with default index %s: %s", defaultIndex.string(), err)
-		}
-		return index, nil
-	} else {
-		return defaultIndex, fmt.Errorf("encountered error while reading index file content, starting with default index %s", defaultIndex.string())
+	newContent := strings.Split(string(content), "\n")[0]
+	r.log.Debugf("found '%s' in index file", newContent)
+	index, err := newIndex(newContent)
+	if err != nil {
+		return defaultIndex, fmt.Errorf("encountered error while parsing index file content, starting with default index %s: %s", defaultIndex.string(), err)
 	}
+
+	return index, nil
 }
 
 func (r *Reader) setIndex(indexPath string, index index) {
