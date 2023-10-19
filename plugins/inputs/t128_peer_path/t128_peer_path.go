@@ -1,6 +1,7 @@
 package t128_peer_path
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -153,17 +154,52 @@ func (plugin *T128PeerPath) Gather(acc telegraf.Accumulator) error {
 			acc.AddError(err)
 		}
 	}
+
 	for _, processedResponse := range processedResponses {
-		for k, v := range processedResponse.Tags {
-			if k == "adjacentAddress" && v == "127.117.97.105" {
-				delete(processedResponse.Tags, "adjacentAddress")
-				continue
-			}
-			if k == "adjacentHostname" && v == "" {
-				delete(processedResponse.Tags, "adjacentHostname")
-				continue
-			}
+
+		routerValue, exists := processedResponse.Tags["routerName"]
+		if exists {
+			processedResponse.Tags["peerRouter"] = routerValue
+			delete(processedResponse.Tags, "routerName")
 		}
+
+		adjacentAddressValue, adjacentAddressExists := processedResponse.Tags["adjacentAddress"]
+		adjacentHostnameValue, adjacentHostnameExists := processedResponse.Tags["adjacentHostname"]
+		if adjacentAddressExists && adjacentAddressValue == "127.117.97.105" {
+			delete(processedResponse.Tags, "adjacentAddress")
+			processedResponse.Tags["peer-path"] = fmt.Sprintf(
+				"%s/%s/%s/%s/%s",
+				processedResponse.Tags["peerRouter"],
+				processedResponse.Tags["adjacentHostname"],
+				processedResponse.Tags["node"],
+				processedResponse.Tags["deviceInterface"],
+				processedResponse.Tags["vlan"],
+			)
+		} else if adjacentHostnameExists && adjacentHostnameValue != "" {
+			processedResponse.Tags["peer-path"] = fmt.Sprintf(
+				"%s/%s/%s/%s/%s/%s",
+				processedResponse.Tags["peerRouter"],
+				processedResponse.Tags["adjacentAddress"],
+				processedResponse.Tags["adjacentHostname"],
+				processedResponse.Tags["node"],
+				processedResponse.Tags["deviceInterface"],
+				processedResponse.Tags["vlan"],
+			)
+		} else {
+			processedResponse.Tags["peer-path"] = fmt.Sprintf(
+				"%s/%s/%s/%s/%s",
+				processedResponse.Tags["peerRouter"],
+				processedResponse.Tags["adjacentAddress"],
+				processedResponse.Tags["node"],
+				processedResponse.Tags["deviceInterface"],
+				processedResponse.Tags["vlan"],
+			)
+		}
+		_, Nodeexists := processedResponse.Tags["node"]
+		if Nodeexists {
+			delete(processedResponse.Tags, "node")
+		}
+
 		acc.AddFields(
 			plugin.CollectorName,
 			processedResponse.Fields,
