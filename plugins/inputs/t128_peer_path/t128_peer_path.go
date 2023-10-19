@@ -11,6 +11,15 @@ import (
 )
 
 const (
+	peerRouterKey       = "peerRouter"
+	adjacentAddressKey  = "adjacentAddress"
+	adjacentHostnameKey = "adjacentHostname"
+	nodeKey             = "node"
+	deviceInterfaceKey  = "deviceInterface"
+	vlanKey             = "vlan"
+	peerPathKey         = "peer-path"
+	routerNameKey       = "routerName"
+
 	//DefaultRequestTimeout is the request timeout if none is configured
 	DefaultRequestTimeout = 5 * time.Second
 
@@ -157,47 +166,47 @@ func (plugin *T128PeerPath) Gather(acc telegraf.Accumulator) error {
 
 	for _, processedResponse := range processedResponses {
 
-		routerValue, exists := processedResponse.Tags["routerName"]
+		routerValue, exists := processedResponse.Tags[routerNameKey]
 		if exists {
-			processedResponse.Tags["peerRouter"] = routerValue
-			delete(processedResponse.Tags, "routerName")
+			processedResponse.Tags[peerRouterKey] = routerValue
+			delete(processedResponse.Tags, routerNameKey)
 		}
 
-		adjacentAddressValue, adjacentAddressExists := processedResponse.Tags["adjacentAddress"]
-		adjacentHostnameValue, adjacentHostnameExists := processedResponse.Tags["adjacentHostname"]
+		adjacentAddressValue, adjacentAddressExists := processedResponse.Tags[adjacentAddressKey]
+		adjacentHostnameValue, adjacentHostnameExists := processedResponse.Tags[adjacentHostnameKey]
 		if adjacentAddressExists && adjacentAddressValue == "127.117.97.105" {
-			delete(processedResponse.Tags, "adjacentAddress")
-			processedResponse.Tags["peer-path"] = fmt.Sprintf(
+			delete(processedResponse.Tags, adjacentAddressKey)
+			processedResponse.Tags[peerPathKey] = fmt.Sprintf(
 				"%s/%s/%s/%s/%s",
-				processedResponse.Tags["peerRouter"],
-				processedResponse.Tags["adjacentHostname"],
-				processedResponse.Tags["node"],
-				processedResponse.Tags["deviceInterface"],
-				processedResponse.Tags["vlan"],
+				processedResponse.Tags[peerRouterKey],
+				processedResponse.Tags[adjacentHostnameKey],
+				processedResponse.Tags[nodeKey],
+				processedResponse.Tags[deviceInterfaceKey],
+				processedResponse.Tags[vlanKey],
 			)
 		} else if adjacentHostnameExists && adjacentHostnameValue != "" {
-			processedResponse.Tags["peer-path"] = fmt.Sprintf(
+			processedResponse.Tags[peerPathKey] = fmt.Sprintf(
 				"%s/%s/%s/%s/%s/%s",
-				processedResponse.Tags["peerRouter"],
-				processedResponse.Tags["adjacentAddress"],
-				processedResponse.Tags["adjacentHostname"],
-				processedResponse.Tags["node"],
-				processedResponse.Tags["deviceInterface"],
-				processedResponse.Tags["vlan"],
+				processedResponse.Tags[peerRouterKey],
+				processedResponse.Tags[adjacentAddressKey],
+				processedResponse.Tags[adjacentHostnameKey],
+				processedResponse.Tags[nodeKey],
+				processedResponse.Tags[deviceInterfaceKey],
+				processedResponse.Tags[vlanKey],
 			)
 		} else {
-			processedResponse.Tags["peer-path"] = fmt.Sprintf(
+			processedResponse.Tags[peerPathKey] = fmt.Sprintf(
 				"%s/%s/%s/%s/%s",
-				processedResponse.Tags["peerRouter"],
-				processedResponse.Tags["adjacentAddress"],
-				processedResponse.Tags["node"],
-				processedResponse.Tags["deviceInterface"],
-				processedResponse.Tags["vlan"],
+				processedResponse.Tags[peerRouterKey],
+				processedResponse.Tags[adjacentAddressKey],
+				processedResponse.Tags[nodeKey],
+				processedResponse.Tags[deviceInterfaceKey],
+				processedResponse.Tags[vlanKey],
 			)
 		}
-		_, Nodeexists := processedResponse.Tags["node"]
-		if Nodeexists {
-			delete(processedResponse.Tags, "node")
+		_, nodeExists := processedResponse.Tags[nodeKey]
+		if nodeExists {
+			delete(processedResponse.Tags, nodeKey)
 		}
 
 		acc.AddFields(
