@@ -8,7 +8,7 @@ The tank input plugin collects data from a 128T.
 [[inputs.t128_tank]]
 ## A (unique) file to use for index tracking. 
 ## This tracking allows each event to be produced once.
-# index_file = ""
+# index-file = ""
 
 ## Required. The TANK topic to consume.
 # topic = "events"

@@ -22,7 +22,7 @@ var sampleConfig = `
 [[inputs.t128_tank]]
 ## A (unique) file to use for index tracking. 
 ## This tracking allows each event to be produced once.
-# index_file = ""
+# index-file = ""
 
 ## Required. The TANK topic to consume.
 # topic = "events"
@@ -44,7 +44,7 @@ var sampleConfig = `
 `
 
 type T128Tank struct {
-	IndexFile            string `toml:"index_file"`
+	IndexFile            string `toml:"index-file"`
 	Topic                string `toml:"topic"`
 	PortNumber           int    `toml:"port_number"`
 	ServerAddress        string `toml:"server_address"`
