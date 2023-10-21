@@ -105,7 +105,7 @@ type Reader struct {
 }
 
 func NewReader(tankAddress string, tankPort int, topic string, indexPath string, defaultIndex index, log telegraf.Logger, acc telegraf.Accumulator) *Reader {
-	return &Reader{
+	r := &Reader{
 		topic:          topic,
 		tankReadCmdCtx: exec.CommandContext,
 		sendChan:       make(chan []IndexedMessage),
@@ -118,6 +118,13 @@ func NewReader(tankAddress string, tankPort int, topic string, indexPath string,
 		log:            log,
 		acc:            acc,
 	}
+	lastSavedIndex, err := r.getIndex(indexPath, defaultIndex)
+	if err != nil {
+		r.log.Errorf("Error loading last saved index: %v", err)
+		lastSavedIndex = r.defaultIndex
+	}
+	r.lastSavedIndex = lastSavedIndex.value
+	return r
 }
 
 func (r *Reader) withTankReadCommandContext(tankReadCmdCtx CommandContext) *Reader {
@@ -269,6 +276,10 @@ func (r *Reader) readFromTank(readCtx context.Context, startingIndex index) (err
 		var collectedMessages []IndexedMessage
 		for _, message := range messages {
 			collectedMessages = append(collectedMessages, *message)
+		}
+		if len(collectedMessages) > 0 {
+			r.lastSavedIndex = collectedMessages[len(collectedMessages)-1].Index.value
+			r.setIndex(r.indexPath, index{value: r.lastSavedIndex})
 		}
 		select {
 		case <-readCtx.Done():
