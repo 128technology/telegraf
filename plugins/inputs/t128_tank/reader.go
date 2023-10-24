@@ -105,7 +105,7 @@ type Reader struct {
 }
 
 func NewReader(tankAddress string, tankPort int, topic string, indexPath string, defaultIndex index, log telegraf.Logger, acc telegraf.Accumulator) *Reader {
-	r := &Reader{
+	return &Reader{
 		topic:          topic,
 		tankReadCmdCtx: exec.CommandContext,
 		sendChan:       make(chan []IndexedMessage),
@@ -118,13 +118,6 @@ func NewReader(tankAddress string, tankPort int, topic string, indexPath string,
 		log:            log,
 		acc:            acc,
 	}
-	lastSavedIndex, err := r.getIndex(indexPath, defaultIndex)
-	if err != nil {
-		r.log.Errorf("Error loading last saved index: %v", err)
-		lastSavedIndex = r.defaultIndex
-	}
-	r.lastSavedIndex = lastSavedIndex.value
-	return r
 }
 
 func (r *Reader) withTankReadCommandContext(tankReadCmdCtx CommandContext) *Reader {
@@ -132,42 +125,47 @@ func (r *Reader) withTankReadCommandContext(tankReadCmdCtx CommandContext) *Read
 	return r
 }
 
+func (r *Reader) saveIndex(indexValue uint64) {
+	r.lastSavedIndex = indexValue
+	r.setIndex(r.indexPath, index{value: indexValue})
+}
+
 func (r *Reader) Run(mainCtx context.Context) {
 	readCtx, readCtxCancel := context.WithCancel(mainCtx)
 	lastIndex, err := r.getIndex(r.indexPath, r.defaultIndex)
-	r.lastSavedIndex = lastIndex.value
 	if err != nil {
 		r.log.Errorf("Error in get index %v", err)
 		readCtxCancel()
 		return
 	}
 
-	nextSaveCheck := time.After(2 * time.Second)
-	defer func() {
-		readCtxCancel()
-		r.setIndex(r.indexPath, index{value: r.lastSavedIndex})
-	}()
-
+	nextSaveCheck := time.NewTicker(2 * time.Second)
+	defer readCtxCancel()
 	go r.read(readCtx, lastIndex.next())
 
 	for {
+
 		select {
 		case <-mainCtx.Done():
 			r.log.Errorf("%s reader done", r.topic)
+			r.saveIndex(r.lastSavedIndex)
 			return
-		case <-nextSaveCheck:
+		case <-nextSaveCheck.C:
 			if lastIndex.value > r.lastSavedIndex {
-				r.setIndex(r.indexPath, lastIndex)
-				r.lastSavedIndex = lastIndex.value
+				r.saveIndex(lastIndex.value)
 			}
-			nextSaveCheck = time.After(2 * time.Second)
+			if lastIndex.value%1000 == 0 {
+				r.saveIndex(lastIndex.value)
+			}
 		case err := <-r.readDone:
 			var errBoundaryFault *boundaryFault
 			if err != nil && errors.As(err, &errBoundaryFault) {
 				r.log.Debugf("detected boundary fault, restarting %s tank read from index %d", r.topic, errBoundaryFault.nextAvailableIndex.value)
-				go r.read(readCtx, errBoundaryFault.nextAvailableIndex)
+				lastIndex = errBoundaryFault.nextAvailableIndex
+				go r.read(readCtx, lastIndex)
 			} else {
-				go r.read(readCtx, lastIndex.next())
+				lastIndex = lastIndex.next()
+				go r.read(readCtx, lastIndex)
 			}
 		}
 	}
@@ -227,7 +225,9 @@ func (r *Reader) read(readCtx context.Context, startingIndex index) {
 		time.Sleep(r.restartDelay)
 	}
 
-	r.readDone <- err
+	defer func() {
+		r.readDone <- err
+	}()
 }
 
 func (r *Reader) readFromTank(readCtx context.Context, startingIndex index) (err error) {
@@ -276,10 +276,7 @@ func (r *Reader) readFromTank(readCtx context.Context, startingIndex index) (err
 		var collectedMessages []IndexedMessage
 		for _, message := range messages {
 			collectedMessages = append(collectedMessages, *message)
-		}
-		if len(collectedMessages) > 0 {
-			r.lastSavedIndex = collectedMessages[len(collectedMessages)-1].Index.value
-			r.setIndex(r.indexPath, index{value: r.lastSavedIndex})
+			r.lastSavedIndex = message.Index.value
 		}
 		select {
 		case <-readCtx.Done():
