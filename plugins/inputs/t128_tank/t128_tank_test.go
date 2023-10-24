@@ -122,6 +122,115 @@ func TestT128TankReader(t *testing.T) {
 	}
 }
 
+func TestT128TankReaderWithTracking(t *testing.T) {
+	testcases := []struct {
+		Name                   string
+		IndexFile              string
+		IndexFileContent       string
+		Topic                  string
+		PortNumber             int
+		ServerAddress          string
+		TankReadCommandContext mockTankCommadContext
+		DefaultIndex           index
+		ExpectedMetrics        []IndexedMessage
+		MaxInFlightBatches     int
+		MaxBatchSize           int
+		MaxBatchDelay          time.Duration
+	}{
+		{
+			Name:          "index file with no value",
+			Topic:         "events",
+			PortNumber:    11011,
+			ServerAddress: "127.0.0.2",
+			DefaultIndex:  StartIndex,
+			TankReadCommandContext: func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+				cmd := exec.CommandContext(ctx, "echo", "seq=1:measurement,core=2,node=test-1,port=corp-dmz-p value=0i 1586886775")
+				return cmd
+			},
+			ExpectedMetrics: []IndexedMessage{
+				{
+					Message: []byte("measurement,core=2,node=test-1,port=corp-dmz-p value=0i 1586886775"),
+					Index:   index{value: 1},
+				},
+			},
+		},
+		{
+			Name:             "index file with value",
+			IndexFileContent: "150",
+			Topic:            "events",
+			PortNumber:       11011,
+			ServerAddress:    "127.0.0.2",
+			DefaultIndex:     StartIndex,
+			TankReadCommandContext: func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+				cmd := exec.CommandContext(ctx, "echo", "seq=150:measurement,core=2,node=test-1,port=corp-dmz-p value=0i 1586886775")
+				return cmd
+			},
+			ExpectedMetrics: []IndexedMessage{
+				{
+					Message: []byte("measurement,core=2,node=test-1,port=corp-dmz-p value=0i 1586886775"),
+					Index:   index{value: 150},
+				},
+			},
+		},
+	}
+	for _, testcase := range testcases {
+		t.Run(testcase.Name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(context.Background())
+			var wg sync.WaitGroup
+
+			defer func() {
+				cancel()
+				wg.Wait()
+			}()
+
+			var acc testutil.Accumulator
+			var receivedMessages []IndexedMessage
+
+			indexFileName := strings.ReplaceAll(testcase.Name, " ", "_")
+			if testcase.IndexFileContent != "" {
+				err := os.WriteFile(indexFileName, []byte(testcase.IndexFileContent), 0755)
+				assert.NoError(t, err)
+			}
+
+			plugin := &T128Tank{
+				IndexFile:     indexFileName,
+				Topic:         testcase.Topic,
+				PortNumber:    testcase.PortNumber,
+				ServerAddress: testcase.ServerAddress,
+			}
+
+			reader := NewReader(
+				plugin.ServerAddress,
+				plugin.PortNumber,
+				plugin.Topic,
+				plugin.IndexFile,
+				testcase.DefaultIndex,
+				testutil.Logger{},
+			).withTankReadCommandContext(testcase.TankReadCommandContext)
+
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				reader.Run(ctx)
+			}()
+
+			select {
+			case <-time.After(5 * time.Second):
+				t.Log("no messages received")
+			case <-ctx.Done():
+				t.Log("context canceled")
+			case messages := <-reader.sendChan:
+				receivedMessages = append(receivedMessages, messages...)
+			}
+
+			if len(testcase.ExpectedMetrics) > 0 && receivedMessages != nil {
+				assert.Equal(t, testcase.ExpectedMetrics, receivedMessages)
+
+			}
+		})
+	}
+}
+
 func TestBoundaryFault(t *testing.T) {
 	testcases := []struct {
 		Name                   string

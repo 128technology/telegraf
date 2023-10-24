@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -80,10 +81,7 @@ func (i index) next() index {
 type CommandContext = func(ctx context.Context, name string, arg ...string) *exec.Cmd
 
 type Reader struct {
-	topic          string
-	lastSavedIndex uint64
-	// used to send events from the read routine to the send routine
-	sendChan chan []IndexedMessage
+	topic string
 	// the target address for the TANK instance
 	tankAddress string
 	// the target port for the TANK instance
@@ -100,15 +98,12 @@ type Reader struct {
 	defaultIndex index
 	// telegraf Logger
 	log telegraf.Logger
-	// telegraf accumulator
-	acc telegraf.Accumulator
 }
 
-func NewReader(tankAddress string, tankPort int, topic string, indexPath string, defaultIndex index, log telegraf.Logger, acc telegraf.Accumulator) *Reader {
+func NewReader(tankAddress string, tankPort int, topic string, indexPath string, defaultIndex index, log telegraf.Logger) *Reader {
 	return &Reader{
 		topic:          topic,
 		tankReadCmdCtx: exec.CommandContext,
-		sendChan:       make(chan []IndexedMessage),
 		readDone:       make(chan error),
 		restartDelay:   5 * time.Second,
 		tankAddress:    tankAddress,
@@ -116,7 +111,6 @@ func NewReader(tankAddress string, tankPort int, topic string, indexPath string,
 		indexPath:      indexPath,
 		defaultIndex:   defaultIndex,
 		log:            log,
-		acc:            acc,
 	}
 }
 
@@ -125,42 +119,71 @@ func (r *Reader) withTankReadCommandContext(tankReadCmdCtx CommandContext) *Read
 	return r
 }
 
-func (r *Reader) Run(mainCtx context.Context) {
-	readCtx, readCtxCancel := context.WithCancel(mainCtx)
+// readSubcmdCtx: the context for the subcommand specifically, not the run loop
+// sendComplete: indices to save - close this channel to complete the run
+func (r *Reader) Run(
+	readSubcmdCtx context.Context,
+	sendChan chan []IndexedMessage,
+	sendComplete <-chan uint64,
+) {
+	var wg sync.WaitGroup
+
 	lastIndex, err := r.getIndex(r.indexPath, r.defaultIndex)
-	r.lastSavedIndex = lastIndex.value
+	lastSavedIndex := lastIndex.value
 	if err != nil {
 		r.log.Errorf("Error in get index %v", err)
-		readCtxCancel()
 		return
 	}
 
 	nextSaveCheck := time.After(2 * time.Second)
+	saveIndex := func() {
+		lastSavedIndex = lastIndex.value
+		r.setIndex(r.indexPath, lastIndex)
+	}
+
 	defer func() {
-		readCtxCancel()
-		r.setIndex(r.indexPath, index{value: r.lastSavedIndex})
+		wg.Wait()
+		saveIndex()
 	}()
 
-	go r.read(readCtx, lastIndex.next())
+	goRead := func(idx index) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			r.read(readSubcmdCtx, idx, sendChan)
+		}()
+	}
+
+	goRead(lastIndex.next())
 
 	for {
 		select {
-		case <-mainCtx.Done():
-			r.log.Errorf("%s reader done", r.topic)
-			return
 		case <-nextSaveCheck:
-			if lastIndex.value > r.lastSavedIndex {
+			if lastIndex.value > lastSavedIndex {
 				r.setIndex(r.indexPath, lastIndex)
-				r.lastSavedIndex = lastIndex.value
+				lastSavedIndex = lastIndex.value
 			}
 			nextSaveCheck = time.After(2 * time.Second)
+		case completeIndex, ok := <-sendComplete:
+			if !ok {
+				return
+			}
+			lastIndex.value = completeIndex
+			if lastIndex.value%1000 == 0 {
+				saveIndex()
+			}
 		case err := <-r.readDone:
+			// clean exit due to context cancel
+			if err == nil || readSubcmdCtx.Err() != nil {
+				continue
+			}
+
 			var errBoundaryFault *boundaryFault
-			if err != nil && errors.As(err, &errBoundaryFault) {
+			if errors.As(err, &errBoundaryFault) {
 				r.log.Debugf("detected boundary fault, restarting %s tank read from index %d", r.topic, errBoundaryFault.nextAvailableIndex.value)
-				go r.read(readCtx, errBoundaryFault.nextAvailableIndex)
+				goRead(errBoundaryFault.nextAvailableIndex)
 			} else {
-				go r.read(readCtx, lastIndex.next())
+				goRead(lastIndex.next())
 			}
 		}
 	}
@@ -210,13 +233,14 @@ func (r *Reader) setIndex(indexPath string, index index) {
 	}
 }
 
-func (r *Reader) read(readCtx context.Context, startingIndex index) {
+func (r *Reader) read(readCtx context.Context, startingIndex index, sendChan chan []IndexedMessage) {
 	r.log.Infof("starting %s tank read from index %d", r.topic, startingIndex.value)
-	err := r.readFromTank(readCtx, startingIndex)
+	err := r.readFromTank(readCtx, startingIndex, sendChan)
 	if err != nil {
 		r.log.Errorf("%s read routine exited with error: %v", r.topic, err)
 	}
 
+	// we dont want to sleep on context cancel, otherwise shutdown will be slow
 	if readCtx.Err() == nil {
 		time.Sleep(r.restartDelay)
 	}
@@ -224,7 +248,7 @@ func (r *Reader) read(readCtx context.Context, startingIndex index) {
 	r.readDone <- err
 }
 
-func (r *Reader) readFromTank(readCtx context.Context, startingIndex index) (err error) {
+func (r *Reader) readFromTank(readCtx context.Context, startingIndex index, sendChan chan []IndexedMessage) (err error) {
 	cmdArgs := []string{
 		"/opt/128technology/bin/tank-cli",
 		"-b",
@@ -274,7 +298,7 @@ func (r *Reader) readFromTank(readCtx context.Context, startingIndex index) (err
 		select {
 		case <-readCtx.Done():
 			return nil
-		case r.sendChan <- collectedMessages:
+		case sendChan <- collectedMessages:
 		}
 	}
 }
