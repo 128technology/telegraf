@@ -7,8 +7,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/influxdata/telegraf"
+	"github.com/influxdata/telegraf/config"
 	"github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/parsers"
 )
@@ -44,18 +46,20 @@ var sampleConfig = `
 `
 
 type T128Tank struct {
-	IndexFile            string `toml:"index-file"`
-	Topic                string `toml:"topic"`
-	PortNumber           int    `toml:"port_number"`
-	ServerAddress        string `toml:"server_address"`
-	SequenceNumberField  string `toml:"sequence_number_field"`
-	From                 string `toml:"from"`
+	IndexFile            string          `toml:"index-file"`
+	Topic                string          `toml:"topic"`
+	PortNumber           int             `toml:"port_number"`
+	ServerAddress        string          `toml:"server_address"`
+	SequenceNumberField  string          `toml:"sequence_number_field"`
+	From                 string          `toml:"from"`
+	Precision            config.Duration `toml:"data_precision"`
 	Log                  telegraf.Logger
 	ctx                  context.Context
 	mainWG               sync.WaitGroup
 	cancel               context.CancelFunc
 	parser               parsers.Parser
 	defaultStartingIndex index
+	adjustTime           func(telegraf.Metric)
 }
 
 func (*T128Tank) SampleConfig() string {
@@ -76,6 +80,12 @@ func (plugin *T128Tank) Init() error {
 		return err
 	}
 
+	if plugin.Precision != config.Duration(time.Nanosecond) {
+		plugin.adjustTime = func(m telegraf.Metric) {
+			adjustedNano := m.Time().UnixNano() * int64(plugin.Precision)
+			m.SetTime(time.Unix(0, adjustedNano))
+		}
+	}
 	return nil
 }
 
@@ -84,6 +94,9 @@ func (plugin *T128Tank) Gather(_ telegraf.Accumulator) error {
 }
 
 func (plugin *T128Tank) Start(acc telegraf.Accumulator) error {
+	if plugin.adjustTime == nil {
+		plugin.adjustTime = func(m telegraf.Metric) {}
+	}
 	plugin.ctx, plugin.cancel = context.WithCancel(context.Background())
 	reader := NewReader(plugin.ServerAddress, plugin.PortNumber, plugin.Topic, plugin.IndexFile, plugin.defaultStartingIndex, plugin.Log, acc)
 	plugin.mainWG.Add(1)
@@ -103,6 +116,7 @@ func (plugin *T128Tank) Start(acc telegraf.Accumulator) error {
 						if plugin.SequenceNumberField != "" {
 							metric.AddField(plugin.SequenceNumberField, strconv.FormatUint(message.Index.value, 10))
 						}
+						plugin.adjustTime(metric)
 						acc.AddMetric(metric)
 					}
 				}
