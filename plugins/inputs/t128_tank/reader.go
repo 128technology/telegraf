@@ -100,11 +100,9 @@ type Reader struct {
 	defaultIndex index
 	// telegraf Logger
 	log telegraf.Logger
-	// telegraf accumulator
-	acc telegraf.Accumulator
 }
 
-func NewReader(tankAddress string, tankPort int, topic string, indexPath string, defaultIndex index, log telegraf.Logger, acc telegraf.Accumulator) *Reader {
+func NewReader(tankAddress string, tankPort int, topic string, indexPath string, defaultIndex index, log telegraf.Logger) *Reader {
 	return &Reader{
 		topic:             topic,
 		lastObservedIndex: make(chan uint64, 1),
@@ -117,7 +115,6 @@ func NewReader(tankAddress string, tankPort int, topic string, indexPath string,
 		indexPath:         indexPath,
 		defaultIndex:      defaultIndex,
 		log:               log,
-		acc:               acc,
 	}
 }
 
@@ -154,20 +151,12 @@ func (r *Reader) Run(mainCtx context.Context) {
 			r.log.Errorf("%s reader done", r.topic)
 			return
 		case observedValue := <-r.lastObservedIndex:
-			lastIndex.value = observedValue
-			if lastIndex.value%1000 == 0 {
+			if lastIndex.value < observedValue {
+				lastIndex.value = observedValue
 				r.setIndex(r.indexPath, index{value: lastIndex.value})
 			}
 		case <-nextSaveCheck.C:
-			var observedValue uint64
-			select {
-			case observedValue = <-r.lastObservedIndex:
-			default:
-				continue
-			}
-			if lastIndex.value > observedValue {
-				lastIndex.value = observedValue
-				r.lastObservedIndex <- lastIndex.value
+			if lastIndex.value%1000 == 0 {
 				r.setIndex(r.indexPath, index{value: lastIndex.value})
 			}
 		case err := <-r.readDone:

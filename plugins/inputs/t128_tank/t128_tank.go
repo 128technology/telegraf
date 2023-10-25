@@ -95,16 +95,16 @@ func (plugin *T128Tank) Gather(_ telegraf.Accumulator) error {
 
 func (plugin *T128Tank) Start(acc telegraf.Accumulator) error {
 	if plugin.adjustTime == nil {
-		unreasonableTimestamp := time.Unix(0, 0).Add(24 * time.Hour)
+		unreasonableTimestamp := time.Unix(24*60*60, 0)
 		plugin.adjustTime = func(m telegraf.Metric) {
-			mTime := m.Time()
-			if mTime.Before(unreasonableTimestamp) {
-				m.SetTime(unreasonableTimestamp.Truncate(time.Second))
+			mTime := m.Time().Unix()
+			if mTime < unreasonableTimestamp.Unix() {
+				m.SetTime(unreasonableTimestamp)
 			}
 		}
 	}
 	plugin.ctx, plugin.cancel = context.WithCancel(context.Background())
-	reader := NewReader(plugin.ServerAddress, plugin.PortNumber, plugin.Topic, plugin.IndexFile, plugin.defaultStartingIndex, plugin.Log, acc)
+	reader := NewReader(plugin.ServerAddress, plugin.PortNumber, plugin.Topic, plugin.IndexFile, plugin.defaultStartingIndex, plugin.Log)
 	plugin.mainWG.Add(1)
 	go func() {
 		defer plugin.mainWG.Done()
