@@ -11,6 +11,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/influxdata/telegraf"
+	"github.com/influxdata/telegraf/config"
+	"github.com/influxdata/telegraf/metric"
 	"github.com/influxdata/telegraf/testutil"
 	"github.com/stretchr/testify/assert"
 )
@@ -78,7 +81,6 @@ func TestT128TankReader(t *testing.T) {
 				ServerAddress: testcase.ServerAddress,
 			}
 
-			var acc testutil.Accumulator
 			var receivedMessages []IndexedMessage
 			ctx, cancel := context.WithCancel(context.Background())
 			var wg sync.WaitGroup
@@ -95,7 +97,6 @@ func TestT128TankReader(t *testing.T) {
 				plugin.IndexFile,
 				testcase.DefaultIndex,
 				testutil.Logger{},
-				&acc,
 			).withTankReadCommandContext(testcase.TankReadCommandContext)
 			wg.Add(1)
 			go func() {
@@ -155,7 +156,6 @@ func TestBoundaryFault(t *testing.T) {
 				ServerAddress: testcase.ServerAddress,
 			}
 
-			var acc testutil.Accumulator
 			var wg sync.WaitGroup
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -173,7 +173,6 @@ func TestBoundaryFault(t *testing.T) {
 				plugin.IndexFile,
 				testcase.DefaultIndex,
 				testutil.Logger{},
-				&acc,
 			).withTankReadCommandContext(testcase.TankReadCommandContext)
 			var receivedErrorMessage string
 			wg.Add(1)
@@ -239,4 +238,63 @@ func TestIndexParsing(t *testing.T) {
 
 	_, err = newIndex("foo")
 	assert.Error(t, err)
+}
+
+func newMetric(name string, tags map[string]string, fields map[string]interface{}) telegraf.Metric {
+	if tags == nil {
+		tags = map[string]string{}
+	}
+	if fields == nil {
+		fields = map[string]interface{}{}
+	}
+	m := metric.New(name, tags, fields, time.Now())
+	return m
+}
+
+func TestUnreasonableTimestamp(t *testing.T) {
+	testCases := []struct {
+		Name                  string
+		UnreasonableTimestamp time.Time
+		ExpectedMessage       time.Time
+		Precision             time.Duration
+	}{
+		{
+			Name:            "Precision in Nanosecond",
+			ExpectedMessage: time.Unix(24*60*60, 0),
+			Precision:       time.Nanosecond,
+		},
+		{
+			Name:            "Precision is Empty",
+			ExpectedMessage: time.Unix(0, 0),
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.Name, func(t *testing.T) {
+			fmt.Println(testCase.Name)
+			metric := newMetric("test_metric", nil, nil)
+			metric.SetTime(testCase.UnreasonableTimestamp)
+
+			plugin := &T128Tank{
+				Topic:     "test",
+				Precision: config.Duration(testCase.Precision),
+			}
+			plugin.Init()
+			if plugin.adjustTime == nil {
+				unreasonableTimestamp := time.Unix(0, 0).Add(24 * time.Hour)
+				plugin.adjustTime = func(m telegraf.Metric) {
+					mTime := m.Time()
+					if mTime.Before(unreasonableTimestamp) {
+						adjustedSeconds := unreasonableTimestamp.Unix()
+						m.SetTime(time.Unix(adjustedSeconds, 0))
+					}
+				}
+			}
+			plugin.adjustTime(metric)
+
+			if !metric.Time().Equal(testCase.ExpectedMessage) {
+				t.Errorf("Expected time: %s, Actual time: %s", testCase.ExpectedMessage, metric.Time())
+			}
+		})
+	}
 }

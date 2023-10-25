@@ -95,11 +95,12 @@ func (plugin *T128Tank) Gather(_ telegraf.Accumulator) error {
 
 func (plugin *T128Tank) Start(acc telegraf.Accumulator) error {
 	if plugin.adjustTime == nil {
-		unreasonableTimestamp := time.Unix(24*60*60, 0)
+		unreasonableTimestamp := time.Unix(0, 0).Add(24 * time.Hour)
 		plugin.adjustTime = func(m telegraf.Metric) {
-			mTime := m.Time().Unix()
-			if mTime < unreasonableTimestamp.Unix() {
-				m.SetTime(unreasonableTimestamp)
+			mTime := m.Time()
+			if mTime.Before(unreasonableTimestamp) {
+				adjustedTime := unreasonableTimestamp.Unix()
+				m.SetTime(time.Unix(adjustedTime, 0))
 			}
 		}
 	}
