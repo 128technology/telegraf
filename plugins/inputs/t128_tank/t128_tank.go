@@ -99,7 +99,7 @@ func (plugin *T128Tank) Start(acc telegraf.Accumulator) error {
 		plugin.adjustTime = func(m telegraf.Metric) {
 			mTime := m.Time()
 			if mTime.Before(unreasonableTimestamp) {
-				adjustedTime := unreasonableTimestamp.Unix()
+				adjustedTime := unreasonableTimestamp.Unix() * int64(plugin.Precision)
 				m.SetTime(time.Unix(adjustedTime, 0))
 			}
 		}

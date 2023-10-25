@@ -247,7 +247,7 @@ func newMetric(name string, tags map[string]string, fields map[string]interface{
 	if fields == nil {
 		fields = map[string]interface{}{}
 	}
-	m := metric.New(name, tags, fields, time.Now())
+	m := metric.New(name, tags, fields, time.Date(1960, time.October, 25, 12, 0, 0, 0, time.UTC))
 	return m
 }
 
@@ -272,29 +272,18 @@ func TestUnreasonableTimestamp(t *testing.T) {
 	for _, testCase := range testCases {
 		t.Run(testCase.Name, func(t *testing.T) {
 			fmt.Println(testCase.Name)
+			var acc testutil.Accumulator
 			metric := newMetric("test_metric", nil, nil)
-			metric.SetTime(testCase.UnreasonableTimestamp)
 
 			plugin := &T128Tank{
 				Topic:     "test",
 				Precision: config.Duration(testCase.Precision),
 			}
 			plugin.Init()
-			if plugin.adjustTime == nil {
-				unreasonableTimestamp := time.Unix(0, 0).Add(24 * time.Hour)
-				plugin.adjustTime = func(m telegraf.Metric) {
-					mTime := m.Time()
-					if mTime.Before(unreasonableTimestamp) {
-						adjustedSeconds := unreasonableTimestamp.Unix()
-						m.SetTime(time.Unix(adjustedSeconds, 0))
-					}
-				}
-			}
+			plugin.Start(&acc)
 			plugin.adjustTime(metric)
 
-			if !metric.Time().Equal(testCase.ExpectedMessage) {
-				t.Errorf("Expected time: %s, Actual time: %s", testCase.ExpectedMessage, metric.Time())
-			}
+			assert.Equal(t, testCase.ExpectedMessage, metric.Time())
 		})
 	}
 }

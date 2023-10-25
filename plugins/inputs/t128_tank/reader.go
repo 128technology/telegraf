@@ -125,6 +125,7 @@ func (r *Reader) withTankReadCommandContext(tankReadCmdCtx CommandContext) *Read
 
 func (r *Reader) Run(mainCtx context.Context) {
 	readCtx, readCtxCancel := context.WithCancel(mainCtx)
+	var observedValue uint64
 	lastIndex, err := r.getIndex(r.indexPath, r.defaultIndex)
 	if err != nil {
 		r.log.Errorf("Error in get index %v", err)
@@ -145,20 +146,20 @@ func (r *Reader) Run(mainCtx context.Context) {
 	go r.read(readCtx, lastIndex.next())
 
 	for {
-
 		select {
 		case <-mainCtx.Done():
 			r.log.Errorf("%s reader done", r.topic)
 			return
-		case observedValue := <-r.lastObservedIndex:
-			if lastIndex.value < observedValue {
-				lastIndex.value = observedValue
-				r.setIndex(r.indexPath, index{value: lastIndex.value})
-			}
-		case <-nextSaveCheck.C:
+		case observedValue = <-r.lastObservedIndex:
 			if lastIndex.value%1000 == 0 {
 				r.setIndex(r.indexPath, index{value: lastIndex.value})
 			}
+		case <-nextSaveCheck.C:
+			if observedValue > lastIndex.value {
+				lastIndex.value = observedValue
+				r.setIndex(r.indexPath, index{value: lastIndex.value})
+			}
+
 		case err := <-r.readDone:
 			var errBoundaryFault *boundaryFault
 			if err != nil && errors.As(err, &errBoundaryFault) {
