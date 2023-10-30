@@ -46,13 +46,13 @@ var sampleConfig = `
 `
 
 type T128Tank struct {
-	IndexFile            string          `toml:"index-file"`
-	Topic                string          `toml:"topic"`
-	PortNumber           int             `toml:"port_number"`
-	ServerAddress        string          `toml:"server_address"`
-	SequenceNumberField  string          `toml:"sequence_number_field"`
-	From                 string          `toml:"from"`
-	Precision            config.Duration `toml:"data_precision"`
+	IndexFile            string           `toml:"index-file"`
+	Topic                string           `toml:"topic"`
+	PortNumber           int              `toml:"port_number"`
+	ServerAddress        string           `toml:"server_address"`
+	SequenceNumberField  string           `toml:"sequence_number_field"`
+	From                 string           `toml:"from"`
+	Precision            *config.Duration `toml:"data_precision"`
 	Log                  telegraf.Logger
 	ctx                  context.Context
 	mainWG               sync.WaitGroup
@@ -80,10 +80,9 @@ func (plugin *T128Tank) Init() error {
 		return err
 	}
 
-	if plugin.Precision != config.Duration(time.Nanosecond) {
+	if plugin.Precision != nil {
 		plugin.adjustTime = func(m telegraf.Metric) {
-			adjustedNano := m.Time().UnixNano() * int64(plugin.Precision)
-			m.SetTime(time.Unix(0, adjustedNano))
+			m.SetTime(reinterpretTimestampPrecision(m.Time(), *plugin.Precision))
 		}
 	}
 	return nil
@@ -94,18 +93,25 @@ func (plugin *T128Tank) Gather(_ telegraf.Accumulator) error {
 }
 
 func (plugin *T128Tank) Start(acc telegraf.Accumulator) error {
-	if plugin.adjustTime == nil {
+	if plugin.adjustTime == nil && plugin.Precision == nil {
 		unreasonableTimestamp := time.Unix(0, 0).Add(24 * time.Hour)
+		reinterpretPrecision := config.Duration(1 * time.Second)
 		plugin.adjustTime = func(m telegraf.Metric) {
 			mTime := m.Time()
 			if mTime.Before(unreasonableTimestamp) {
-				adjustedTime := unreasonableTimestamp.Unix() * int64(plugin.Precision)
-				m.SetTime(time.Unix(adjustedTime, 0))
+				m.SetTime(reinterpretTimestampPrecision(mTime, reinterpretPrecision))
 			}
 		}
 	}
 	plugin.ctx, plugin.cancel = context.WithCancel(context.Background())
-	reader := NewReader(plugin.ServerAddress, plugin.PortNumber, plugin.Topic, plugin.IndexFile, plugin.defaultStartingIndex, plugin.Log)
+	reader := NewReader(
+		plugin.ServerAddress,
+		plugin.PortNumber,
+		plugin.Topic,
+		plugin.IndexFile,
+		plugin.defaultStartingIndex,
+		plugin.Log,
+	)
 	plugin.mainWG.Add(1)
 	go func() {
 		defer plugin.mainWG.Done()
@@ -123,7 +129,9 @@ func (plugin *T128Tank) Start(acc telegraf.Accumulator) error {
 						if plugin.SequenceNumberField != "" {
 							metric.AddField(plugin.SequenceNumberField, strconv.FormatUint(message.Index.value, 10))
 						}
-						plugin.adjustTime(metric)
+						if plugin.adjustTime != nil {
+							plugin.adjustTime(metric)
+						}
 						acc.AddMetric(metric)
 					}
 				}
@@ -179,6 +187,11 @@ func validateFrom(from string) error {
 		return errors.New("Invalid from value. Accepted values are 'start' or 'end'.")
 	}
 	return nil
+}
+
+func reinterpretTimestampPrecision(current time.Time, precision config.Duration) time.Time {
+	adjustedNano := current.UnixNano() * int64(precision)
+	return time.Unix(0, adjustedNano)
 }
 
 func init() {
