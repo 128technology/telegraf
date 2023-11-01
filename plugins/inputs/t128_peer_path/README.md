@@ -1,6 +1,6 @@
 # 128T Peer Path Input Plugin
 
-The peer path input plugin collects data from a 128T instance via graphQL.
+The peer path input can be used for monitoring the up/down status of all the peer paths on the node.
 
 ## Configuration
 
