@@ -80,8 +80,8 @@ func (i index) next() index {
 type CommandContext = func(ctx context.Context, name string, arg ...string) *exec.Cmd
 
 type Reader struct {
-	topic          string
-	lastSavedIndex uint64
+	topic             string
+	lastObservedIndex chan uint64
 	// used to send events from the read routine to the send routine
 	sendChan chan []IndexedMessage
 	// the target address for the TANK instance
@@ -100,23 +100,21 @@ type Reader struct {
 	defaultIndex index
 	// telegraf Logger
 	log telegraf.Logger
-	// telegraf accumulator
-	acc telegraf.Accumulator
 }
 
-func NewReader(tankAddress string, tankPort int, topic string, indexPath string, defaultIndex index, log telegraf.Logger, acc telegraf.Accumulator) *Reader {
+func NewReader(tankAddress string, tankPort int, topic string, indexPath string, defaultIndex index, log telegraf.Logger) *Reader {
 	return &Reader{
-		topic:          topic,
-		tankReadCmdCtx: exec.CommandContext,
-		sendChan:       make(chan []IndexedMessage),
-		readDone:       make(chan error),
-		restartDelay:   5 * time.Second,
-		tankAddress:    tankAddress,
-		tankPort:       tankPort,
-		indexPath:      indexPath,
-		defaultIndex:   defaultIndex,
-		log:            log,
-		acc:            acc,
+		topic:             topic,
+		lastObservedIndex: make(chan uint64, 1),
+		tankReadCmdCtx:    exec.CommandContext,
+		sendChan:          make(chan []IndexedMessage),
+		readDone:          make(chan error),
+		restartDelay:      5 * time.Second,
+		tankAddress:       tankAddress,
+		tankPort:          tankPort,
+		indexPath:         indexPath,
+		defaultIndex:      defaultIndex,
+		log:               log,
 	}
 }
 
@@ -127,20 +125,24 @@ func (r *Reader) withTankReadCommandContext(tankReadCmdCtx CommandContext) *Read
 
 func (r *Reader) Run(mainCtx context.Context) {
 	readCtx, readCtxCancel := context.WithCancel(mainCtx)
+	var observedValue uint64
 	lastIndex, err := r.getIndex(r.indexPath, r.defaultIndex)
-	r.lastSavedIndex = lastIndex.value
 	if err != nil {
 		r.log.Errorf("Error in get index %v", err)
 		readCtxCancel()
 		return
 	}
-
-	nextSaveCheck := time.After(2 * time.Second)
+	nextSaveCheck := time.NewTicker(2 * time.Second)
 	defer func() {
 		readCtxCancel()
-		r.setIndex(r.indexPath, index{value: r.lastSavedIndex})
+		close(r.lastObservedIndex)
+		observedValue, ok := <-r.lastObservedIndex
+		if ok {
+			r.setIndex(r.indexPath, index{value: observedValue})
+		} else {
+			r.setIndex(r.indexPath, index{value: lastIndex.value})
+		}
 	}()
-
 	go r.read(readCtx, lastIndex.next())
 
 	for {
@@ -148,19 +150,25 @@ func (r *Reader) Run(mainCtx context.Context) {
 		case <-mainCtx.Done():
 			r.log.Errorf("%s reader done", r.topic)
 			return
-		case <-nextSaveCheck:
-			if lastIndex.value > r.lastSavedIndex {
-				r.setIndex(r.indexPath, lastIndex)
-				r.lastSavedIndex = lastIndex.value
+		case observedValue = <-r.lastObservedIndex:
+			if lastIndex.value%1000 == 0 {
+				r.setIndex(r.indexPath, index{value: lastIndex.value})
 			}
-			nextSaveCheck = time.After(2 * time.Second)
+		case <-nextSaveCheck.C:
+			if observedValue > lastIndex.value {
+				lastIndex.value = observedValue
+				r.setIndex(r.indexPath, index{value: lastIndex.value})
+			}
+
 		case err := <-r.readDone:
 			var errBoundaryFault *boundaryFault
 			if err != nil && errors.As(err, &errBoundaryFault) {
 				r.log.Debugf("detected boundary fault, restarting %s tank read from index %d", r.topic, errBoundaryFault.nextAvailableIndex.value)
-				go r.read(readCtx, errBoundaryFault.nextAvailableIndex)
+				lastIndex = errBoundaryFault.nextAvailableIndex
+				go r.read(readCtx, lastIndex)
 			} else {
-				go r.read(readCtx, lastIndex.next())
+				lastIndex = lastIndex.next()
+				go r.read(readCtx, lastIndex)
 			}
 		}
 	}
@@ -179,10 +187,9 @@ func (r *Reader) getIndex(indexPath string, defaultIndex index) (index, error) {
 	} else if err != nil {
 		return defaultIndex, fmt.Errorf("encountered error reading index file, starting with default index %s: %s", defaultIndex.string(), err)
 	}
-
-	r.log.Debugf("found '%s' in index file", content)
-
-	index, err := newIndex(string(content))
+	newContent := strings.Split(string(content), "\n")[0]
+	r.log.Debugf("found '%s' in index file", newContent)
+	index, err := newIndex(newContent)
 	if err != nil {
 		return defaultIndex, fmt.Errorf("encountered error while parsing index file content, starting with default index %s: %s", defaultIndex.string(), err)
 	}
@@ -270,6 +277,7 @@ func (r *Reader) readFromTank(readCtx context.Context, startingIndex index) (err
 		var collectedMessages []IndexedMessage
 		for _, message := range messages {
 			collectedMessages = append(collectedMessages, *message)
+			r.lastObservedIndex <- message.Index.value
 		}
 		select {
 		case <-readCtx.Done():

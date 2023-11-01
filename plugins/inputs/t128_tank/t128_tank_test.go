@@ -11,6 +11,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/influxdata/telegraf"
+	"github.com/influxdata/telegraf/config"
+	"github.com/influxdata/telegraf/metric"
+	"github.com/influxdata/telegraf/plugins/parsers/influx"
 	"github.com/influxdata/telegraf/testutil"
 	"github.com/stretchr/testify/assert"
 )
@@ -78,7 +82,6 @@ func TestT128TankReader(t *testing.T) {
 				ServerAddress: testcase.ServerAddress,
 			}
 
-			var acc testutil.Accumulator
 			var receivedMessages []IndexedMessage
 			ctx, cancel := context.WithCancel(context.Background())
 			var wg sync.WaitGroup
@@ -95,7 +98,6 @@ func TestT128TankReader(t *testing.T) {
 				plugin.IndexFile,
 				testcase.DefaultIndex,
 				testutil.Logger{},
-				&acc,
 			).withTankReadCommandContext(testcase.TankReadCommandContext)
 			wg.Add(1)
 			go func() {
@@ -155,7 +157,6 @@ func TestBoundaryFault(t *testing.T) {
 				ServerAddress: testcase.ServerAddress,
 			}
 
-			var acc testutil.Accumulator
 			var wg sync.WaitGroup
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -173,7 +174,6 @@ func TestBoundaryFault(t *testing.T) {
 				plugin.IndexFile,
 				testcase.DefaultIndex,
 				testutil.Logger{},
-				&acc,
 			).withTankReadCommandContext(testcase.TankReadCommandContext)
 			var receivedErrorMessage string
 			wg.Add(1)
@@ -239,4 +239,109 @@ func TestIndexParsing(t *testing.T) {
 
 	_, err = newIndex("foo")
 	assert.Error(t, err)
+}
+
+func newMetric(name string, tags map[string]string, fields map[string]interface{}) telegraf.Metric {
+	if tags == nil {
+		tags = map[string]string{}
+	}
+	if fields == nil {
+		fields = map[string]interface{}{}
+	}
+	m := metric.New(name, tags, fields, time.Date(1960, time.October, 25, 12, 0, 0, 0, time.UTC))
+	return m
+}
+
+func TestPrecisionTimestamp(t *testing.T) {
+	nanosecond := config.Duration(1 * time.Nanosecond)
+	second := config.Duration(1 * time.Second)
+
+	reasonableTimestamp, err := time.Parse(time.RFC3339Nano, "2023-01-01T10:15:23.578Z")
+	if !assert.NoError(t, err) {
+		return
+	}
+	reasonableTimestamp = reasonableTimestamp.UTC()
+
+	reasonableSeconds := reasonableTimestamp.Unix()
+	incorrectlyInterpreted := time.Unix(reasonableSeconds/(10e9), reasonableSeconds%(10e9)).UTC()
+
+	testCases := []struct {
+		Name                string
+		ConfiguredPrecision *config.Duration
+		ActualTimestamp     int64
+		ExpectedTimestamp   time.Time
+	}{
+		{
+			Name:                "Precision in Nanosecond",
+			ConfiguredPrecision: &nanosecond,
+			ActualTimestamp:     reasonableTimestamp.UnixNano(),
+			ExpectedTimestamp:   reasonableTimestamp,
+		},
+		{
+			Name:                "Precision in Nanosecond with unreasonable timestamp",
+			ConfiguredPrecision: &nanosecond,
+			ActualTimestamp:     incorrectlyInterpreted.UnixNano(),
+			ExpectedTimestamp:   incorrectlyInterpreted,
+		},
+		{
+			Name:                "Precision is Seconds",
+			ConfiguredPrecision: &second,
+			ActualTimestamp:     reasonableTimestamp.Unix(),
+			ExpectedTimestamp:   reasonableTimestamp.Truncate(1 * time.Second),
+		},
+		{
+			Name:                "Precision is Seconds with unreasonable timestamp",
+			ConfiguredPrecision: &second,
+			ActualTimestamp:     incorrectlyInterpreted.Unix(),
+			ExpectedTimestamp:   incorrectlyInterpreted.Truncate(1 * time.Second),
+		},
+		{
+			Name:                "Incorrectly Interpreted",
+			ConfiguredPrecision: &nanosecond,
+			ActualTimestamp:     reasonableTimestamp.Unix(),
+			ExpectedTimestamp:   incorrectlyInterpreted,
+		},
+		{
+			Name:              "Precision is empty with unreasonable timestamp",
+			ActualTimestamp:   reasonableTimestamp.Unix(),
+			ExpectedTimestamp: reasonableTimestamp.Truncate(1 * time.Second),
+		},
+		{
+			Name:              "Precision is empty with reasonable timestamp",
+			ActualTimestamp:   reasonableTimestamp.UnixNano(),
+			ExpectedTimestamp: reasonableTimestamp,
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.Name, func(t *testing.T) {
+			fmt.Println(testCase.Name)
+			var acc testutil.Accumulator
+
+			plugin := &T128Tank{
+				Topic:     "test",
+				Log:       testutil.Logger{},
+				Precision: testCase.ConfiguredPrecision,
+			}
+
+			if !assert.NoError(t, plugin.Init()) {
+				return
+			}
+			plugin.Start(&acc)
+
+			metricHandler := influx.NewMetricHandler()
+			metricParser := influx.NewParser(metricHandler)
+			metricParser.ParseLine(fmt.Sprintf("test_metric value=10i %v", testCase.ActualTimestamp))
+			metric, err := metricHandler.Metric()
+			if !assert.NoError(t, err) {
+				return
+			}
+
+			if plugin.adjustTime != nil {
+				plugin.adjustTime(metric)
+			}
+
+			assert.Equal(t, testCase.ExpectedTimestamp, metric.Time().UTC())
+		})
+	}
 }
