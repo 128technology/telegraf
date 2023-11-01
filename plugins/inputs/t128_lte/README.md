@@ -1,6 +1,6 @@
 # 128T LTE Input Plugin
 
-The lte input plugin collects data from a 128T.
+The LTE collector input when run will scan the current node configuration for any SSR supported and configured LTE devices. This collector can be used for pushing data such as signal-strength, carrier information etc to the monitoring stack.
 
 ## Configuration
 
