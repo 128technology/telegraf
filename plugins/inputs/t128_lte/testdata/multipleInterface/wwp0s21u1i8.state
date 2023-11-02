@@ -1,0 +1,16 @@
+{
+  "LTE": {
+    "Active 3GPP Profile": {
+      "APN": "vzwinternet"
+    },
+    "Signal Strength": "good",
+    "RSRQ Signal Strength": "-20 dB",
+    "RSSI Signal Strength": "-72 dBm",
+    "Radio Interface": "lte",
+    "RSRP Signal Strength": "-113 dBm",
+    "Registration Status": "registered",
+    "Active Band Class": "eutran-2",
+    "Carrier": "Verizon",
+    "Connection Status": "connected"
+  }
+}

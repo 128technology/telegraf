@@ -30,11 +30,16 @@ def build(args):
         "rpm_version": f"{args.version}-{args.release}",
     }
 
+    build_commands = ["make", "x86_64.rpm"]
+
+    if args.clean:
+        build_commands.insert(1, "clean")
+
     try:
         subprocess.run(
             build_docker_command(
                 args.docker_file,
-                ["make", "x86_64.rpm"],
+                build_commands,
                 interactive=False,
                 env=env,
             ),
@@ -50,10 +55,11 @@ def shell(args):
 
 
 def create_docker_env(docker_file):
+    cmd = ["docker", "build", "-t", IMAGE_NAME, "-f", docker_file, SCRIPTS]
+    if "--no-cache" in sys.argv:
+        cmd.insert(2, "--no-cache")
     try:
-        subprocess.check_call(
-            ["docker", "build", "-t", IMAGE_NAME, "-f", docker_file, SCRIPTS]
-        )
+        subprocess.check_call(cmd)
     except subprocess.CalledProcessError as error:
         print("Failed to build the docker image")
         sys.exit(1)
@@ -129,6 +135,18 @@ def parse_args():
     build_parser.add_argument(
         "--no-fetch",
         help="Whether to fetch dependencies before building. If not, you should have run `make deps` in your source directory.",
+        action="store_true",
+    )
+
+    build_parser.add_argument(
+        "--clean", 
+        help="Whether to clean up and build everything from scratch", 
+        action="store_true",
+    )
+
+    build_parser.add_argument(
+        "--no-cache", 
+        help="Whether to build everything from scratch or from cache", 
         action="store_true",
     )
 
