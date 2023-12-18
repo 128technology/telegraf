@@ -6,12 +6,16 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/influxdata/go-syslog/v3/rfc5424"
 
 	"github.com/influxdata/telegraf"
 )
+
+// this is needed until https://github.com/influxdata/go-syslog/pull/51 is released
+var translationMutex sync.Mutex
 
 type SyslogMapper struct {
 	DefaultSdid         string
@@ -56,6 +60,9 @@ func (sm *SyslogMapper) mapStructuredDataItem(key string, value string, msg *rfc
 	if sm.reservedKeys[key] {
 		return
 	}
+
+	translationMutex.Lock()
+	defer translationMutex.Unlock()
 
 	value = escapeInvalidCharacters(value)
 
