@@ -4,7 +4,7 @@ The `t128_filter` filters out metrics passing through it. This processor is usef
 
 [Metric selectors](docs/CONFIGURATION.md#selectors) (such as `tagpass` and `tagdrop`) can be used to only apply the filters to specific metrics.
 
-### Configuration:
+## Configuration
 
 ```toml
 [[processors.t128_filter]]
@@ -47,7 +47,7 @@ The `t128_filter` filters out metrics passing through it. This processor is usef
     # tag1 = ["value3"]
 ```
 
-### Basic Example Filter:
+### Basic Example Filter
 
 Multiple values for a specific tag are OR'd together. A metric without a tag is also dropped.
 
@@ -66,7 +66,7 @@ measurement tag1=value2 1612214810000000000
 - measurement 1612214805000000000
 ```
 
-### Multiple Keys Example Filter:
+### Multiple Keys Example Filter
 
 Multiple keys are AND'd together.
 
@@ -86,7 +86,7 @@ measurement tag1=value1,tag2=value2 1612214810000000000
 - measurement tag1=value1,tag2=value3 1612214805000000000
 ```
 
-### Multiple Conditions Example Filter:
+### Multiple Conditions Example Filter
 
 Multiple conditions are OR'd together.
 
@@ -109,7 +109,7 @@ measurement tag1=value2 1612214810000000000
 - measurement tag1=value3 1612214810000000000
 ```
 
-### Basic Field Example Filter:
+### Basic Field Example Filter
 
 Fields can also be filtered on by themselves or AND'd together with tags.
 

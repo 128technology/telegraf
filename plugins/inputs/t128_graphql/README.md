@@ -52,7 +52,7 @@ The graphql input plugin collects data from a 128T instance via graphQL.
 
 For the configuration above, the plugin will build the following graphQL query:
 
-```
+```graphql
 query {
   allRouters(name: "RTR_EAST_COMBO") {
     nodes {
@@ -77,7 +77,7 @@ query {
 
 For the query above, an example graphQL response is:
 
-```
+```json
 {
   "data": {
     "allRouters": {
@@ -115,7 +115,7 @@ For the query above, an example graphQL response is:
 
 For the response above, the collector outputs:
 
-```
+```text
 peer-paths,router-name=RTR_EAST_COMBO,device-interface=10,peer-name=fake other="foo",is-active=true,status="DOWN" 1617285085000000000
 peer-paths,router-name=RTR_EAST_COMBO,device-interface=11,peer-name=fake other="foo",is-active=true,status="UP" 1617285085000000000
 ```
