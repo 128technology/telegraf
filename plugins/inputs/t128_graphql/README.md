@@ -2,7 +2,7 @@
 
 The graphql input plugin collects data from a 128T instance via graphQL.
 
-### Configuration
+## Configuration
 
 ```toml
 # Collect data from a 128T instance using graphQL.
