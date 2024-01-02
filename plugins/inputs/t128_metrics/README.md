@@ -2,7 +2,7 @@
 
 The metrics input plugin collects metrics from a 128T instance.
 
-### Configuration
+## Configuration
 
 ```toml
 # Read metrics from a 128T instance

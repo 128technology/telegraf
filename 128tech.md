@@ -15,7 +15,7 @@ When moving to a new upstream version, things are a little more complicated. It 
 
 First, pull down the new upstream branch. Then, determine what's been added locally and needs to be included in the new custom build. Do this by finding the commits that were added in the custom branch. This example uses release 1.14, but that will change as time passes.
 
-```
+```shell
 git log --no-merges --left-right --graph --cherry-pick --oneline release-1.14..release-128tech-1.14 | tail -r
 ```
 
@@ -25,13 +25,13 @@ That should provide a limited number of commits that will need to be cherry-pick
 
 Building a new RPM should be straight forward. The necessary building environments exist in the CI docker containers. There is a script `./scripts/docker-env` that wraps docker commands for easy use. To build an RPM from the current source code (example versioning used), simply run:
 
-```
+```shell
 ./scripts/docker-env build --version 1.13.1 --release 2
 ```
 
 This will produce new RPMs and place them into the `build` directory.
 
-```
+```shell
 ./scripts/docker-env build --version 1.13.1 --release 3 --no-fetch
 ```
 
@@ -39,20 +39,20 @@ This will produce new RPMs and place them into the `build` directory.
 
 While not a comprehensive guide, this will get you started. You can drop into the docker environment by running:
 
-```
+```shell
 ./scripts/docker-env shell
 ```
 
 From there, you can use `go` and the Telegraf `make` commands as desired. For a few examples, to run all the tests, simply run:
 
-```
+```shell
 go get -v -t -d ./...
 go test -short ./...
 ```
 
 or to run a single plugin's tests, run
 
-```
+```shell
 go get -v -t -d ./...
 go test ./plugins/outputs/http/
 ```

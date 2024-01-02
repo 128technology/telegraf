@@ -2,7 +2,7 @@
 
 The `t128_transform` transforms metrics based on the difference between two observed points.
 
-### Configuration:
+## Configuration
 
 ```toml
 [[processors.t128_transform]]
@@ -25,7 +25,7 @@ The `t128_transform` transforms metrics based on the difference between two obse
   # "/inline/replace" = "/inline/replace"
 ```
 
-### Example Diff:
+### Example Diff
 
 ```toml
 [[processors.t128_transform]]
@@ -41,7 +41,7 @@ The `t128_transform` transforms metrics based on the difference between two obse
 + measurement diff=5i 1612214810000000000
 ```
 
-### Example Rate:
+### Example Rate
 
 ```toml
 [[processors.t128_transform]]
