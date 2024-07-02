@@ -18,6 +18,7 @@ const (
 BuildQuery first creates an intermediary query object that is traversed by buildQueryBody() in pre-order
 
 Args:
+
 	entryPoint example - "allRouters(name:'ComboEast')/nodes/nodes(name:'combo-east')/nodes/arp/nodes"
 	fields example - map[string]string{"enabled": "enabled"}
 	tags example - map[string]string{
@@ -26,6 +27,7 @@ Args:
 		}
 
 Example:
+
 	For the example input above, buildQueryObject() will produce the following query object
 
 	{
@@ -77,12 +79,13 @@ func BuildQuery(config *Config) string {
 	return query
 }
 
-//buildQueryBody creates an intermediary query object that is traversed by buildQueryBody
+// buildQueryBody creates an intermediary query object that is traversed by buildQueryBody
 func buildQueryObject(config *Config) *gabs.Container {
 	jsonObj := gabs.New()
 
 	addToQueryObj(jsonObj, config.Predicates)
 	addToQueryObj(jsonObj, config.Fields)
+	addToQueryObj(jsonObj, config.CompoundFields)
 	addToQueryObj(jsonObj, config.Tags)
 
 	return jsonObj
@@ -94,7 +97,7 @@ func addToQueryObj(jsonObj *gabs.Container, items map[string]string) {
 	}
 }
 
-//buildQueryBody builds the graphql query body by traversing jsonObj in pre-order and writing to the provided writer
+// buildQueryBody builds the graphql query body by traversing jsonObj in pre-order and writing to the provided writer
 func buildQueryBody(jsonObj *gabs.Container, w io.Writer) {
 	jsonChildren, err := jsonObj.ChildrenMap()
 	if err != nil {

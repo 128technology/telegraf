@@ -8,13 +8,15 @@ import (
 )
 
 var JSONPathFormationTestCases = []struct {
-	Name              string
-	EntryPoint        string
-	Fields            map[string]string
-	FieldsWithAbsPath map[string]string
-	Tags              map[string]string
-	TagsWithAbsPath   map[string]string
-	ExpectedOutput    *plugin.Config
+	Name                      string
+	EntryPoint                string
+	Fields                    map[string]string
+	FieldsWithAbsPath         map[string]string
+	CompoundFields            map[string]string
+	CompoundFieldsWithAbsPath map[string]string
+	Tags                      map[string]string
+	TagsWithAbsPath           map[string]string
+	ExpectedOutput            *plugin.Config
 }{
 	{
 		Name:           "process simple input",
@@ -93,6 +95,8 @@ func TestT128GraphqlEntryPointParsing(t *testing.T) {
 				testCase.EntryPoint,
 				testCase.Fields,
 				testCase.FieldsWithAbsPath,
+				testCase.CompoundFields,
+				testCase.CompoundFieldsWithAbsPath,
 				testCase.Tags,
 				testCase.TagsWithAbsPath,
 			)

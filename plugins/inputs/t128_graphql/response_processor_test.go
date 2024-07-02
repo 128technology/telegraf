@@ -16,6 +16,7 @@ const (
 var ResponseProcessingTestCases = []struct {
 	Name           string
 	Fields         map[string]string
+	CompoundFields map[string]string
 	Tags           map[string]string
 	JsonInput      *gabs.Container
 	ExpectedOutput []*plugin.ProcessedResponse
@@ -427,6 +428,7 @@ func TestT128GraphqlResponseProcessing(t *testing.T) {
 			processedResponse, err := plugin.ProcessResponse(
 				testCase.JsonInput,
 				"test-collector",
+				testCase.CompoundFields,
 				testCase.Fields,
 				testCase.Tags,
 			)

@@ -4,11 +4,12 @@ import (
 	"strings"
 )
 
-//Config stores paths to fields, tags and predicates to be used by BuildQuery and ProcessResponse
+// Config stores paths to fields, tags and predicates to be used by BuildQuery and ProcessResponse
 type Config struct {
-	Predicates map[string]string
-	Fields     map[string]string
-	Tags       map[string]string
+	Predicates     map[string]string
+	Fields         map[string]string
+	CompoundFields map[string]string
+	Tags           map[string]string
 }
 
 /*
@@ -16,11 +17,13 @@ LoadConfig converts a telegraf config into paths to predicates, fields and tags 
 Paths correspond to keys in the output to avoid collisions and because they are used as lookups in ProcessResponse
 
 Args:
+
 	entryPoint example - "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes"
 	fieldsIn example - map[string]string{"test-field": "test-field"}
 	tagsIn example - map[string]string{"test-tag": "test-tag"}
 
 Example:
+
 	For the example input above, LoadConfig() will produce the following Config
 
 	*Config{
@@ -36,6 +39,8 @@ func LoadConfig(
 	entryPoint string,
 	fieldsWithRelPath map[string]string,
 	fieldsWithAbsPath map[string]string,
+	compoundFieldsWithRelPath map[string]string,
+	compoundFieldsWithAbsPath map[string]string,
 	tagsWithRelPath map[string]string,
 	tagsWithAbsPath map[string]string,
 ) *Config {
@@ -59,6 +64,8 @@ func LoadConfig(
 	config.Predicates = predicates
 	config.Fields = formatPaths(fieldsWithRelPath, path)
 	addDataWithAbsPath(config.Fields, fieldsWithAbsPath)
+	config.CompoundFields = formatPaths(compoundFieldsWithRelPath, path)
+	addDataWithAbsPath(config.CompoundFields, compoundFieldsWithAbsPath)
 	config.Tags = formatPaths(tagsWithRelPath, path)
 	addDataWithAbsPath(config.Tags, tagsWithAbsPath)
 
@@ -72,7 +79,7 @@ func addDataWithAbsPath(currentTags map[string]string, tagsWithAbsPath map[strin
 	return currentTags
 }
 
-//needed because users configure tags & fields with paths starting at entry_point with "/" instead of "."
+// needed because users configure tags & fields with paths starting at entry_point with "/" instead of "."
 func formatPaths(items map[string]string, basePath string) map[string]string {
 	newMap := make(map[string]string)
 	replacer := strings.NewReplacer("/", ".")
@@ -82,7 +89,7 @@ func formatPaths(items map[string]string, basePath string) map[string]string {
 	return newMap
 }
 
-//needed to strip whitespace and to replace ' with \"
+// needed to strip whitespace and to replace ' with \"
 func formatPredicate(predicate string) string {
 	replacer := strings.NewReplacer(" ", "", "'", "\"")
 	return replacer.Replace(predicate)
