@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/Jeffail/gabs"
+	"github.com/google/go-cmp/cmp"
 	plugin "github.com/influxdata/telegraf/plugins/inputs/t128_graphql"
 	"github.com/stretchr/testify/require"
 )
@@ -428,13 +429,13 @@ func TestT128GraphqlResponseProcessing(t *testing.T) {
 			processedResponse, err := plugin.ProcessResponse(
 				testCase.JsonInput,
 				"test-collector",
-				testCase.CompoundFields,
 				testCase.Fields,
+				testCase.CompoundFields,
 				testCase.Tags,
 			)
 
 			require.Equal(t, testCase.ExpectedError, err)
-			require.ElementsMatch(t, testCase.ExpectedOutput, processedResponse)
+			require.ElementsMatchf(t, testCase.ExpectedOutput, processedResponse, cmp.Diff(testCase.ExpectedOutput, processedResponse))
 		})
 	}
 }

@@ -22,6 +22,7 @@ var JSONPathFormationTestCases = []struct {
 		Name:           "process simple input",
 		EntryPoint:     "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
 		Fields:         getTestFields(),
+		CompoundFields: getTestCompoundFields(),
 		Tags:           getTestTags(),
 		ExpectedOutput: getTestConfigWithPredicates("(name:\"ComboEast\")", "(name:\"east-combo\")"),
 	},
@@ -29,6 +30,7 @@ var JSONPathFormationTestCases = []struct {
 		Name:           "process predicate with list",
 		EntryPoint:     "allRouters(names:['wan','lan'])/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
 		Fields:         getTestFields(),
+		CompoundFields: getTestCompoundFields(),
 		Tags:           getTestTags(),
 		ExpectedOutput: getTestConfigWithPredicates("(names:[\"wan\",\"lan\"])", "(name:\"east-combo\")"),
 	},
@@ -36,6 +38,7 @@ var JSONPathFormationTestCases = []struct {
 		Name:           "process multi-value predicates",
 		EntryPoint:     "allRouters(names:['wan', 'lan'], key2:'value2')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
 		Fields:         getTestFields(),
+		CompoundFields: getTestCompoundFields(),
 		Tags:           getTestTags(),
 		ExpectedOutput: getTestConfigWithPredicates("(names:[\"wan\",\"lan\"],key2:\"value2\")", "(name:\"east-combo\")"),
 	},
@@ -48,6 +51,12 @@ var JSONPathFormationTestCases = []struct {
 		},
 		FieldsWithAbsPath: map[string]string{
 			"other-field": "allServices/nodes/other",
+		},
+		CompoundFields: map[string]string{
+			"compound-field": "compound-field",
+		},
+		CompoundFieldsWithAbsPath: map[string]string{
+			"other-compound-field": "allServices/nodes/other-compound-field",
 		},
 		Tags: getTestTags(),
 		TagsWithAbsPath: map[string]string{
@@ -62,6 +71,10 @@ var JSONPathFormationTestCases = []struct {
 				".data.allServices.nodes.timeSeriesAnalytic.timestamp": "timestamp",
 				".data.allServices.nodes.other":                        "other-field",
 			},
+			CompoundFields: map[string]string{
+				".data.allServices.nodes.timeSeriesAnalytic.compound-field": "compound-field",
+				".data.allServices.nodes.other-compound-field":              "other-compound-field",
+			},
 			Tags: map[string]string{
 				".data.allServices.nodes.timeSeriesAnalytic.test-tag": "test-tag",
 				".data.allServices.nodes.name":                        "name",
@@ -72,6 +85,7 @@ var JSONPathFormationTestCases = []struct {
 		Name:           "process complex config",
 		EntryPoint:     "allRouters(names:['wan', 'lan'], key2:'value2')/nodes/nodes(names:['east-combo', 'west-combo'])/nodes/arp/nodes",
 		Fields:         getTestFields(),
+		CompoundFields: getTestCompoundFields(),
 		Tags:           getTestTags(),
 		ExpectedOutput: getTestConfigWithPredicates("(names:[\"wan\",\"lan\"],key2:\"value2\")", "(names:[\"east-combo\",\"west-combo\"])"),
 	},
@@ -83,8 +97,9 @@ func getTestConfigWithPredicates(pred1 string, pred2 string) *plugin.Config {
 			".data.allRouters.$predicate":             pred1,
 			".data.allRouters.nodes.nodes.$predicate": pred2,
 		},
-		Fields: map[string]string{".data.allRouters.nodes.nodes.nodes.arp.nodes.test-field": "test-field"},
-		Tags:   map[string]string{".data.allRouters.nodes.nodes.nodes.arp.nodes.test-tag": "test-tag"},
+		Fields:         map[string]string{".data.allRouters.nodes.nodes.nodes.arp.nodes.test-field": "test-field"},
+		CompoundFields: map[string]string{".data.allRouters.nodes.nodes.nodes.arp.nodes.test-compound-field": "test-compound-field"},
+		Tags:           map[string]string{".data.allRouters.nodes.nodes.nodes.arp.nodes.test-tag": "test-tag"},
 	}
 }
 
@@ -107,6 +122,10 @@ func TestT128GraphqlEntryPointParsing(t *testing.T) {
 
 func getTestFields() map[string]string {
 	return map[string]string{"test-field": "test-field"}
+}
+
+func getTestCompoundFields() map[string]string {
+	return map[string]string{"test-compound-field": "test-compound-field"}
 }
 
 func getTestTags() map[string]string {
