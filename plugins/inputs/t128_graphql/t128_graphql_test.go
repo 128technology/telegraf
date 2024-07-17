@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/config"
 	plugin "github.com/influxdata/telegraf/plugins/inputs/t128_graphql"
@@ -26,6 +27,7 @@ const (
 	ValidExpectedRequest                  = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}}}}}}"}`
 	ValidExpectedRequestNoTag             = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field}}}}}}}"}`
 	ValidExpectedRequestWithAbsPaths      = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nname\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}\nname}}}}}"}`
+	ValidExpectedRequestWithCompoundField = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nname\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ncompound-field\ntest-field\ntest-tag}}\nname}}}}}"}`
 	ValidExpectedRequestWithMixedResponse = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\nrouter{\npeers(names:\"peer-1\"){\nnodes{\npaths{\nstatus\nuptime}}}}}}}}}"}`
 	InvalidRouterExpectedRequest          = `{"query":"query {\nallRouters(name:\"not-a-router\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ntest-field\ntest-tag}}}}}}}"}`
 	InvalidFieldExpectedRequest           = `{"query":"query {\nallRouters(name:\"ComboEast\"){\nnodes{\nnodes(name:\"east-combo\"){\nnodes{\narp{\nnodes{\ninvalid-field\ntest-tag}}}}}}}"}`
@@ -46,6 +48,7 @@ var CollectorTestCases = []struct {
 	Name             string
 	EntryPoint       string
 	Fields           map[string]string
+	CompoundFields   map[string]string
 	Tags             map[string]string
 	InitError        bool
 	Query            string
@@ -304,6 +307,61 @@ var CollectorTestCases = []struct {
 		ExpectedRequests: []int{1},
 	},
 	{
+		Name:       "compound fields",
+		EntryPoint: "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/arp/nodes",
+		Fields: map[string]string{
+			"test-field":       "test-field",
+			"other-test-field": "allRouters/nodes/nodes/nodes/name",
+		},
+		CompoundFields: map[string]string{
+			"compound-field": "compound-field",
+		},
+		Tags: map[string]string{
+			"test-tag":       "test-tag",
+			"other-test-tag": "allRouters/nodes/name",
+		},
+		Query: ValidQueryWithAbsPaths,
+		Endpoint: Endpoint{"/api/v1/graphql/", 200, ValidExpectedRequestWithCompoundField, `{
+			"data": {
+				"allRouters": {
+				  	"nodes": [{
+						"name": "ComboEast",
+					  	"nodes": {
+							"nodes": [{
+								"name": "east-combo",
+								"arp": {
+							  		"nodes": [{
+								  		"test-field": 128,
+								  		"test-tag": "test-string-1",
+										"compound-field": {
+											"nested-field": "value"
+										}
+									}]
+								}
+						  	}]
+					  	}
+					}]
+				}
+			}
+		}`},
+		ExpectedMetrics: []*testutil.Metric{
+			{
+				Measurement: "test-collector",
+				Tags: map[string]string{
+					"test-tag":       "test-string-1",
+					"other-test-tag": "ComboEast",
+				},
+				Fields: map[string]interface{}{
+					"test-field":       128.0,
+					"other-test-field": "east-combo",
+					"compound-field":   "{\"nested-field\":\"value\"}",
+				},
+			},
+		},
+		ExpectedErrors:   nil,
+		ExpectedRequests: []int{1},
+	},
+	{
 		Name:       "mixed produces errors and response",
 		EntryPoint: "allRouters(name:'ComboEast')/nodes/nodes(name:'east-combo')/nodes/router/peers(names:'peer-1')/nodes",
 		Fields: map[string]string{
@@ -528,6 +586,7 @@ func TestT128GraphqlCollector(t *testing.T) {
 				BaseURL:         fakeServer.URL + "/api/v1/graphql",
 				EntryPoint:      testCase.EntryPoint,
 				Fields:          testCase.Fields,
+				CompoundFields:  testCase.CompoundFields,
 				Tags:            testCase.Tags,
 				RetryIfNotFound: testCase.RetryIfNotFound,
 			}
@@ -563,8 +622,8 @@ func TestT128GraphqlCollector(t *testing.T) {
 				errorStrings = append(errorStrings, err.Error())
 			}
 
-			require.ElementsMatch(t, testCase.ExpectedErrors, errorStrings)
-			require.ElementsMatch(t, testCase.ExpectedMetrics, acc.Metrics)
+			require.ElementsMatchf(t, testCase.ExpectedErrors, errorStrings, cmp.Diff(testCase.ExpectedErrors, errorStrings))
+			require.ElementsMatchf(t, testCase.ExpectedMetrics, acc.Metrics, cmp.Diff(testCase.ExpectedMetrics, acc.Metrics))
 		})
 	}
 }

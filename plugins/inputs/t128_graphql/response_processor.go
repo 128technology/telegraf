@@ -7,10 +7,11 @@ import (
 	"github.com/Jeffail/gabs"
 )
 
-//ProcessedResponse stores the processed fields and tags for injection into telegraf accumulator
+// ProcessedResponse stores the processed fields and tags for injection into telegraf accumulator
 type ProcessedResponse struct {
-	Fields map[string]interface{}
-	Tags   map[string]string
+	Fields         map[string]interface{}
+	CompoundFields map[string]interface{}
+	Tags           map[string]string
 }
 
 /*
@@ -18,6 +19,7 @@ ProcessResponse takes in a query response, pulls out the desired data and stores
 ProcessResponse traverses the response tree recursively and appropriately merges the data returned by each child.
 
 Args:
+
 	jsonData example - see example below
 	fields example - map[string]string{
 			"/data/allRouters/nodes/peers/nodes/paths/adjacentAddress": "adjacent-address",
@@ -28,6 +30,7 @@ Args:
 		}
 
 Example:
+
 	For the the input given above along with the following jsonData input
 
 	{"data":
@@ -90,11 +93,12 @@ Example:
 	}
 
 Definitions:
+
 	leaf - a single tag/field stored in *ProcessedResponse
 	branch - any *ProcessedResponse that isn't a leaf
 */
-func ProcessResponse(jsonData *gabs.Container, collector string, fields map[string]string, tags map[string]string) ([]*ProcessedResponse, error) {
-	processedResponses := processNode(jsonData, "", fields, tags)
+func ProcessResponse(jsonData *gabs.Container, collector string, fields map[string]string, compoundFields map[string]string, tags map[string]string) ([]*ProcessedResponse, error) {
+	processedResponses := processNode(jsonData, "", fields, compoundFields, tags)
 
 	if len(processedResponses) == 1 && getResponseSize(processedResponses[0]) == 0 {
 		return nil, fmt.Errorf("no data collected for collector %s", collector)
@@ -103,13 +107,22 @@ func ProcessResponse(jsonData *gabs.Container, collector string, fields map[stri
 	return processedResponses, nil
 }
 
-func processNode(jsonData *gabs.Container, path string, fields map[string]string, tags map[string]string) []*ProcessedResponse {
-	processedNode, err := processChildren(jsonData, "map", path, fields, tags)
+func processNode(jsonData *gabs.Container, path string, fields map[string]string, compoundFields map[string]string, tags map[string]string) []*ProcessedResponse {
+	processedNode := []*ProcessedResponse{}
+
+	if _, ok := compoundFields[path]; ok {
+		compoundNode := newResponse()
+		compoundNode.Fields = map[string]interface{}{compoundFields[path]: jsonData.String()}
+		processedNode = append(processedNode, compoundNode)
+		return processedNode
+	}
+
+	processedNode, err := processChildren(jsonData, "map", path, fields, compoundFields, tags)
 	if err == nil {
 		return processedNode
 	}
 
-	processedNode, err = processChildren(jsonData, "list", path, fields, tags)
+	processedNode, err = processChildren(jsonData, "list", path, fields, compoundFields, tags)
 	if err == nil {
 		return processedNode
 	}
@@ -128,11 +141,11 @@ func processNode(jsonData *gabs.Container, path string, fields map[string]string
 	return processedNode
 }
 
-func processChildren(jsonData *gabs.Container, mode string, path string, fields map[string]string, tags map[string]string) ([]*ProcessedResponse, error) {
+func processChildren(jsonData *gabs.Container, mode string, path string, fields map[string]string, compoundFields map[string]string, tags map[string]string) ([]*ProcessedResponse, error) {
 	output := []*ProcessedResponse{}
 
 	processChild := func(child *gabs.Container, path string) {
-		processedChild := processNode(child, path, fields, tags)
+		processedChild := processNode(child, path, fields, compoundFields, tags)
 		for _, mergedChildOutput := range mergeAll(processedChild) {
 			output = append(output, mergedChildOutput)
 		}
@@ -166,9 +179,9 @@ func processChildren(jsonData *gabs.Container, mode string, path string, fields 
 	return processAsList()
 }
 
-//Definitions:
-//leaf - a single tag/field stored in *ProcessedResponse
-//branch - any *ProcessedResponse that isn't a leaf
+// Definitions:
+// leaf - a single tag/field stored in *ProcessedResponse
+// branch - any *ProcessedResponse that isn't a leaf
 func collectLeaf(leaf interface{}, mode string, path string, lookup map[string]string) (*ProcessedResponse, error) {
 	output := newResponse()
 
@@ -185,7 +198,7 @@ func collectLeaf(leaf interface{}, mode string, path string, lookup map[string]s
 	return nil, fmt.Errorf("could not collect leaf")
 }
 
-//merges all leaves/branches at a given node
+// merges all leaves/branches at a given node
 func mergeAll(itemsToMerge []*ProcessedResponse) []*ProcessedResponse {
 	leaves := []*ProcessedResponse{}
 	branches := []*ProcessedResponse{}
@@ -214,7 +227,7 @@ func mergeAll(itemsToMerge []*ProcessedResponse) []*ProcessedResponse {
 	return branches
 }
 
-//used when a node only has leaves
+// used when a node only has leaves
 func mergeLeaves(leaves []*ProcessedResponse) []*ProcessedResponse {
 	mergedLeaves := newResponse()
 	for _, leaf := range leaves {
@@ -231,7 +244,7 @@ func mergeLeaves(leaves []*ProcessedResponse) []*ProcessedResponse {
 	return []*ProcessedResponse{mergedLeaves}
 }
 
-//used when a node has branches and leaves
+// used when a node has branches and leaves
 func mergeLeafIntoBranch(leaf *ProcessedResponse, branch *ProcessedResponse) *ProcessedResponse {
 	newBranch := branch
 	success, err := mergeFields(leaf, newBranch)

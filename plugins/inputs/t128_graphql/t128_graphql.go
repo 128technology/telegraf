@@ -34,6 +34,7 @@ type T128GraphQL struct {
 	UnixSocket      string            `toml:"unix_socket"`
 	EntryPoint      string            `toml:"entry_point"`
 	Fields          map[string]string `toml:"extract_fields"`
+	CompoundFields  map[string]string `toml:"extract_compound_fields"`
 	Tags            map[string]string `toml:"extract_tags"`
 	Timeout         config.Duration   `toml:"timeout"`
 	RetryIfNotFound bool              `toml:"retry_if_not_found"`
@@ -68,6 +69,11 @@ func (plugin *T128GraphQL) Init() error {
 		return err
 	}
 
+	compundFieldsWithRelPath, compoundFieldsWithAbsPath, err := validateAndSeparatePaths(plugin.CompoundFields, plugin.EntryPoint)
+	if err != nil {
+		return err
+	}
+
 	tagsWithRelPath, tagsWithAbsPath, err := validateAndSeparatePaths(plugin.Tags, plugin.EntryPoint)
 	if err != nil {
 		return err
@@ -77,6 +83,8 @@ func (plugin *T128GraphQL) Init() error {
 		plugin.EntryPoint,
 		fieldsWithRelPath,
 		fieldsWithAbsPath,
+		compundFieldsWithRelPath,
+		compoundFieldsWithAbsPath,
 		tagsWithRelPath,
 		tagsWithAbsPath,
 	)
@@ -220,7 +228,7 @@ func (plugin *T128GraphQL) MakeRequest() ([]*ProcessedResponse, []error) {
 		errs = append(errs, fmt.Errorf("no data found in response for collector %s", plugin.CollectorName))
 		return nil, errs
 	}
-	processedResponses, err := ProcessResponse(jsonParsed, plugin.CollectorName, plugin.Config.Fields, plugin.Config.Tags)
+	processedResponses, err := ProcessResponse(jsonParsed, plugin.CollectorName, plugin.Config.Fields, plugin.Config.CompoundFields, plugin.Config.Tags)
 	if err != nil {
 		errs = append(errs, err)
 		return nil, errs

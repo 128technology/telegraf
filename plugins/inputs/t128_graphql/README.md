@@ -37,6 +37,12 @@ The graphql input plugin collects data from a 128T instance via graphQL.
 #   status = "paths/status"
 #   other = "allRouters/nodes/other-field"  # absolute path
 
+## Optional. Like `extract_fields`, but for use when the data returned for a
+## requested leaf is not a leaf itself. The data below the field will be produced
+## as a JSON string in the field.
+# [inputs.t128_graphql.extract_compound_fields]
+#   addresses = "paths/addresses"
+
 ## The tags for filtering data with the desired name as the key (left) and the graphQL
 ## query path as the value (right). The path can be relative to the entry point or an absolute
 ## path that does not diverge from the entry-point and does not contain graphQL arguments such
@@ -65,6 +71,7 @@ query {
             isActive
             status
             deviceInterface
+            addresses
           }
         }
       }
@@ -92,12 +99,18 @@ For the query above, an example graphQL response is:
                   {
                     "isActive": true,
                     "status": "DOWN",
-                    "deviceInterface": "10"
+                    "deviceInterface": "10",
+                    "addresses": [
+                      "192.168.1.1"
+                    ]
                   },
                   {
                     "isActive": true,
                     "status": "UP",
-                    "deviceInterface": "11"
+                    "deviceInterface": "11",
+                    "addresses": [
+                      "192.168.1.5"
+                    ]
                   }
                 ],
                 "name": "fake"
@@ -116,6 +129,6 @@ For the query above, an example graphQL response is:
 For the response above, the collector outputs:
 
 ```text
-peer-paths,router-name=RTR_EAST_COMBO,device-interface=10,peer-name=fake other="foo",is-active=true,status="DOWN" 1617285085000000000
-peer-paths,router-name=RTR_EAST_COMBO,device-interface=11,peer-name=fake other="foo",is-active=true,status="UP" 1617285085000000000
+peer-paths,router-name=RTR_EAST_COMBO,device-interface=10,peer-name=fake other="foo",is-active=true,status="DOWN",addresses="[\"192.168.1.1\"]" 1617285085000000000
+peer-paths,router-name=RTR_EAST_COMBO,device-interface=11,peer-name=fake other="foo",is-active=true,status="UP",addresses="[\"192.168.1.5\"]" 1617285085000000000
 ```
