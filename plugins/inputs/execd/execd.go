@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -140,6 +141,10 @@ func (e *Execd) cmdReadOutStream(out io.Reader) {
 			if err == influx.EOF {
 				break // stream ended
 			}
+			if errors.Is(err, os.ErrClosed) {
+				e.Log.Debugf("stream closed: %w", err)
+				break
+			}
 			if parseErr, isParseError := err.(*influx.ParseError); isParseError {
 				// parse error.
 				e.acc.AddError(parseErr)
@@ -162,6 +167,10 @@ func (e *Execd) cmdReadErr(out io.Reader) {
 	}
 
 	if err := scanner.Err(); err != nil {
+		if errors.Is(err, os.ErrClosed) {
+			e.Log.Debugf("stderr stream closed: %w", err)
+			return
+		}
 		e.acc.AddError(fmt.Errorf("error reading stderr: %w", err))
 	}
 }
