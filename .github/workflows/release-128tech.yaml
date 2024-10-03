@@ -18,25 +18,44 @@ jobs:
       - name: Extract the version information from the tag name
         run: bash .github/scripts/set_version_environment_variables.sh
 
-      - name: Build some RPMs
-        id: build
-        uses: ./.github/actions
-        with:
-          version: ${{ env.VERSION }}
-          patch: ${{ env.VERSION_PATCH }}
-
       - name: Get Release
         id: get_release
         uses: bruceadams/get-release@v1.2.2
         env:
           GITHUB_TOKEN: ${{ github.token }}
 
-      - name: Upload RPM to Github
+      - name: Build x86_64 RPMs
+        id: build
+        uses: ./.github/actions
+        with:
+          version: ${{ env.VERSION }}
+          patch: ${{ env.VERSION_PATCH }}
+          arch: x86_64
+      
+      - name: Upload x86_64 RPM to Github
         uses: actions/upload-release-asset@v1.0.2
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           upload_url: ${{ steps.get_release.outputs.upload_url }}
-          asset_path: build/dist/${{ env.RPM_NAME }}
-          asset_name: ${{ env.RPM_NAME }}
+          asset_path: build/dist/${{ env.BASE_RPM_NAME }}.x86_64.rpm
+          asset_name: ${{ env.BASE_RPM_NAME }}.x86_64.rpm
+          asset_content_type: application/x-rpm
+
+      - name: Build aarch64 RPMs
+        id: build
+        uses: ./.github/actions
+        with:
+          version: ${{ env.VERSION }}
+          patch: ${{ env.VERSION_PATCH }}
+          arch: aarch64
+
+      - name: Upload aarch64 RPM to Github
+        uses: actions/upload-release-asset@v1.0.2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path: build/dist/${{ env.BASE_RPM_NAME }}.aarch64.rpm
+          asset_name: ${{ env.BASE_RPM_NAME }}.aarch64.rpm
           asset_content_type: application/x-rpm

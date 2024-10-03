@@ -30,7 +30,7 @@ def build(args):
         "rpm_version": f"{args.version}-{args.release}",
     }
 
-    build_commands = ["make", "x86_64.rpm"]
+    build_commands = ["make", f"{args.arch}.rpm"]
 
     if args.clean:
         build_commands.insert(1, "clean")
@@ -113,6 +113,10 @@ def parse_args():
 
     ## Build args
     build_parser.set_defaults(which="build")
+
+    build_parser.add_argument(
+        "--arch", help="RPM target architecture ", default="x86_64"
+    )
 
     build_parser.add_argument(
         "--version", help="The version the produced RPM should have", required=True

@@ -26,13 +26,13 @@ That should provide a limited number of commits that will need to be cherry-pick
 Building a new RPM should be straight forward. The necessary building environments exist in the CI docker containers. There is a script `./scripts/docker-env` that wraps docker commands for easy use. To build an RPM from the current source code (example versioning used), simply run:
 
 ```shell
-./scripts/docker-env build --version 1.13.1 --release 2
+./scripts/docker-env build --version 1.13.1 --release 2 --arch aarch64
 ```
 
 This will produce new RPMs and place them into the `build` directory.
 
 ```shell
-./scripts/docker-env build --version 1.13.1 --release 3 --no-fetch
+./scripts/docker-env build --version 1.13.1 --release 3 --arch x86_64 --no-fetch
 ```
 
 ## Using the Shell
