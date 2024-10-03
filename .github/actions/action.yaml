@@ -7,6 +7,9 @@ inputs:
   patch:
     description: The patch of the version (e.g. 1 for -1 or 2 for -2)
     required: true
+  arch:
+    description: The targetted build architecture
+    required: true
 runs:
   using: "docker"
   image: "Dockerfile"
@@ -18,4 +21,4 @@ runs:
     rpm_version: ${{ inputs.version }}-${{ inputs.patch }}
   args:
     - make
-    - x86_64.rpm
+    - ${{ inputs.arch }}.rpm
