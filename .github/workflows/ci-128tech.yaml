@@ -33,3 +33,12 @@ jobs:
 
       - name: Test
         run: go test -short ./...
+
+  validation:
+    name: Valdate workflows
+    runs-on: ubuntu-latest
+    steps:
+      - name: Grab Action Validator
+        uses: mpalmer/action-validator@v0.6.0
+      - name: validate
+        run: action-validator .github/workflows
