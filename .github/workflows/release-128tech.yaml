@@ -43,7 +43,7 @@ jobs:
           asset_content_type: application/x-rpm
 
       - name: Build aarch64 RPMs
-        id: build_aarch
+        id: build_x86
         uses: ./.github/actions
         with:
           version: ${{ env.VERSION }}
