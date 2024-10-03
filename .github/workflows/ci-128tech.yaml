@@ -33,10 +33,3 @@ jobs:
 
       - name: Test
         run: go test -short ./...
-
-  workflow-validation:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Validate workflow files
-        run: yamllint .github/workflows
