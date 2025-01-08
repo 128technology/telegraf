@@ -272,7 +272,7 @@ parseLoop:
 		messages, parseErr = parseLines(tankReader, r.topic)
 		if parseErr != nil {
 			r.log.Errorf("encountered error while parsing lines in %s output, will not attempt to parse more lines: %v", r.topic, parseErr)
-			break parseLoop
+			return parseErr
 		}
 		var collectedMessages []IndexedMessage
 		for _, message := range messages {
@@ -284,14 +284,13 @@ parseLoop:
 			break parseLoop
 		case r.sendChan <- collectedMessages:
 		}
-
-		if cmdErr := cmd.Wait(); cmdErr != nil {
-			var exitErr *exec.ExitError
-			if errors.As(cmdErr, &exitErr) {
-				r.log.Errorf("%s tank read command exited with error: %s", r.topic, exitErr.Error())
-			} else {
-				r.log.Errorf("%s tank read command exited with error: %s", r.topic, cmdErr)
-			}
+	}
+	if cmdErr := cmd.Wait(); cmdErr != nil {
+		var exitErr *exec.ExitError
+		if errors.As(cmdErr, &exitErr) {
+			r.log.Errorf("%s tank read command exited with error: %s", r.topic, exitErr.Error())
+		} else {
+			r.log.Errorf("%s tank read command exited with error: %s", r.topic, cmdErr)
 		}
 	}
 
