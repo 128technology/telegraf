@@ -260,12 +260,12 @@ func (r *Reader) readFromTank(readCtx context.Context, startingIndex index) (err
 
 	var parseErr error
 	var messages []*IndexedMessage
-
+parseLoop:
 	for {
 		select {
 		case <-readCtx.Done():
 			r.log.Errorf("%s read routine done", r.topic)
-			return nil
+			break parseLoop
 		default:
 		}
 
@@ -281,10 +281,20 @@ func (r *Reader) readFromTank(readCtx context.Context, startingIndex index) (err
 		}
 		select {
 		case <-readCtx.Done():
-			return nil
+			break parseLoop
 		case r.sendChan <- collectedMessages:
 		}
 	}
+	if cmdErr := cmd.Wait(); cmdErr != nil {
+		var exitErr *exec.ExitError
+		if errors.As(cmdErr, &exitErr) {
+			r.log.Errorf("%s tank read command exited with error: %s", r.topic, exitErr.Error())
+		} else {
+			r.log.Errorf("%s tank read command exited with error: %s", r.topic, cmdErr)
+		}
+	}
+
+	return parseErr
 }
 
 func (i *IndexedMessage) IsValid() bool {
