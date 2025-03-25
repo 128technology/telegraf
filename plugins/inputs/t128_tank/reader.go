@@ -244,7 +244,22 @@ func (r *Reader) readFromTank(readCtx context.Context, startingIndex index) (err
 		startingIndex.string(),
 	}
 
-	cmd := r.tankReadCmdCtx(readCtx, cmdArgs[0], cmdArgs[1:]...)
+	cmdContext, cmdCancel := context.WithCancel(readCtx)
+
+	cmd := r.tankReadCmdCtx(cmdContext, cmdArgs[0], cmdArgs[1:]...)
+
+	defer func() {
+		cmdCancel()
+		if cmdErr := cmd.Wait(); cmdErr != nil {
+			var exitErr *exec.ExitError
+			if errors.As(cmdErr, &exitErr) {
+				r.log.Errorf("%s tank read command exited with error: %s", r.topic, exitErr.Error())
+			} else {
+				r.log.Errorf("%s tank read command exited with error: %s", r.topic, cmdErr)
+			}
+		}
+	}()
+
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("unable to pipe %s tank output: %s", r.topic, err)
@@ -263,7 +278,7 @@ func (r *Reader) readFromTank(readCtx context.Context, startingIndex index) (err
 parseLoop:
 	for {
 		select {
-		case <-readCtx.Done():
+		case <-cmdContext.Done():
 			r.log.Errorf("%s read routine done", r.topic)
 			break parseLoop
 		default:
@@ -280,17 +295,9 @@ parseLoop:
 			r.lastObservedIndex <- message.Index.value
 		}
 		select {
-		case <-readCtx.Done():
+		case <-cmdContext.Done():
 			break parseLoop
 		case r.sendChan <- collectedMessages:
-		}
-	}
-	if cmdErr := cmd.Wait(); cmdErr != nil {
-		var exitErr *exec.ExitError
-		if errors.As(cmdErr, &exitErr) {
-			r.log.Errorf("%s tank read command exited with error: %s", r.topic, exitErr.Error())
-		} else {
-			r.log.Errorf("%s tank read command exited with error: %s", r.topic, cmdErr)
 		}
 	}
 
@@ -384,3 +391,4 @@ func isBoundaryFault(line string) (bool, index) {
 
 	return true, nextIndex
 }
+
