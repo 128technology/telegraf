@@ -133,25 +133,28 @@ func (r *Reader) Run(mainCtx context.Context) {
 		readCtxCancel()
 		return
 	}
-	r.readDone = make(chan error, 5)
-	r.lastObservedIndex = make(chan uint64, 100)
 
 	var wg sync.WaitGroup
 	nextSaveCheck := time.NewTicker(2 * time.Second)
 	defer func() {
 		readCtxCancel()
-		wg.Wait()
+		go func() {
+			wg.Wait()
+			close(r.lastObservedIndex)
+		}()
 
 		var anyFound bool
 		var lastObservedValue uint64
 	drainLoop:
 		for {
 			select {
-			case observedValue := <-r.lastObservedIndex:
+			case observedValue, ok := <-r.lastObservedIndex:
+				if !ok {
+					break drainLoop
+				}
 				anyFound = true
 				lastObservedValue = observedValue
-			default:
-				break drainLoop
+			case <-r.readDone:
 			}
 		}
 		if anyFound {
@@ -159,7 +162,6 @@ func (r *Reader) Run(mainCtx context.Context) {
 		} else {
 			r.setIndex(r.indexPath, index{value: lastIndex.value})
 		}
-		close(r.lastObservedIndex)
 	}()
 
 	wg.Add(1)
