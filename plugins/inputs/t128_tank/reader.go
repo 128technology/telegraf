@@ -128,9 +128,7 @@ func (r *Reader) Run(mainCtx context.Context) {
 	var observedValue uint64
 	lastIndex, err := r.getIndex(r.indexPath, r.defaultIndex)
 	if err != nil {
-		r.log.Errorf("Error in get index %v", err)
-		readCtxCancel()
-		return
+		r.log.Infof("Failed to get index %v", err)
 	}
 	nextSaveCheck := time.NewTicker(2 * time.Second)
 	defer func() {
