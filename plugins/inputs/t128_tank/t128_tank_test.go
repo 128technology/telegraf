@@ -30,6 +30,7 @@ func TestT128TankReader(t *testing.T) {
 		Name                   string
 		IndexFile              string
 		IndexFileContent       string
+		IndexFileEmpty         bool
 		Topic                  string
 		PortNumber             int
 		ServerAddress          string
@@ -38,11 +39,29 @@ func TestT128TankReader(t *testing.T) {
 		ExpectedMetrics        []IndexedMessage
 	}{
 		{
-			Name:          "index file with no value",
+			Name:          "index file does not exist",
 			Topic:         "events",
 			PortNumber:    11011,
 			ServerAddress: "127.0.0.2",
 			DefaultIndex:  StartIndex,
+			TankReadCommandContext: func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+				cmd := exec.CommandContext(ctx, "echo", "seq=1:measurement,core=2,node=test-1,port=corp-dmz-p value=0i 1586886775")
+				return cmd
+			},
+			ExpectedMetrics: []IndexedMessage{
+				{
+					Message: []byte("measurement,core=2,node=test-1,port=corp-dmz-p value=0i 1586886775"),
+					Index:   index{value: 1},
+				},
+			},
+		},
+		{
+			Name:           "index file empty",
+			Topic:          "events",
+			IndexFileEmpty: true,
+			PortNumber:     11011,
+			ServerAddress:  "127.0.0.2",
+			DefaultIndex:   StartIndex,
 			TankReadCommandContext: func(ctx context.Context, name string, arg ...string) *exec.Cmd {
 				cmd := exec.CommandContext(ctx, "echo", "seq=1:measurement,core=2,node=test-1,port=corp-dmz-p value=0i 1586886775")
 				return cmd
@@ -87,7 +106,7 @@ func TestT128TankReader(t *testing.T) {
 			var wg sync.WaitGroup
 			indexFileName := strings.ReplaceAll(testcase.Name, " ", "_")
 			plugin.IndexFile = path.Join(t.TempDir(), fmt.Sprintf("%s.index", indexFileName))
-			if testcase.IndexFileContent != "" {
+			if testcase.IndexFileContent != "" || testcase.IndexFileEmpty {
 				err := os.WriteFile(plugin.IndexFile, []byte(testcase.IndexFileContent), 0755)
 				assert.NoError(t, err)
 			}
@@ -116,9 +135,12 @@ func TestT128TankReader(t *testing.T) {
 
 			cancel()
 
+			if len(testcase.ExpectedMetrics) > 0 {
+				assert.NotNil(t, receivedMessages)
+			}
+
 			if len(testcase.ExpectedMetrics) > 0 && receivedMessages != nil {
 				assert.Equal(t, testcase.ExpectedMetrics, receivedMessages)
-
 			}
 		})
 	}
