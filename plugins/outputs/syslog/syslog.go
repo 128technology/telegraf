@@ -13,6 +13,7 @@ import (
 
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/config"
+	"github.com/influxdata/telegraf/internal"
 	framing "github.com/influxdata/telegraf/internal/syslog"
 	tlsint "github.com/influxdata/telegraf/plugins/common/tls"
 	"github.com/influxdata/telegraf/plugins/outputs"
@@ -132,7 +133,7 @@ func (s *Syslog) Connect() error {
 		c, err = tls.Dial(spl[0], spl[1], tlsCfg)
 	}
 	if err != nil {
-		return err
+		return &internal.StartupError{Err: err, Retry: true}
 	}
 
 	if err := s.setKeepAlive(c); err != nil {
